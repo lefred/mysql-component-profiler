@@ -196,6 +196,8 @@ Query OK, 1 row affected (5.6931 sec)
 $ dot -Tpng cpu.dot -o cpu.png
 ```
 
+![CPU](examples/cpu.png)
+
 ## Memory profiling
 
 ### start
@@ -333,6 +335,7 @@ We can use the file to generate an image:
 ```
 $ dot -Tpng memory.dot -o memory.png
 ```
+![Memory](examples/memory.png)
 
 ## errors, warnings, messages
 
