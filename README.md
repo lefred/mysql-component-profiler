@@ -413,7 +413,7 @@ ERROR: 3200 (HY000): profiler UDF failed; memory profiler is still running, you 
 
 ### tcmalloc
 
-MySQL must be started using tcmalloc memory allocator (`LD_PRELOAD=/usr/lib64/libtcmalloc_and_profiler.so`):
+MySQL must be started using a gperftools-libs library (`LD_PRELOAD=/usr/lib64/libtcmalloc_and_profiler.so`):
 
 ```
 MySQL > install component 'file://component_profiler';
@@ -421,5 +421,11 @@ ERROR: 1126 (HY000): Can't open shared library '/home/fred/workspace/mysql-serve
 (errno: 0 /home/fred/workspace/mysql-server/BIN-DEBUG/lib/plugin/component_profiler.so: undefined symbol: ProfilerStart)
 ```
 
+For memory profiling, you need to use one of these libraries:
+- `libtcmalloc.so`
+- `libtcmalloc_and_profiler.so`
 
+For CPU profiling, you need to use one of those:
+- `libprofiler.so`
+- `libtcmalloc_and_profiler.so`
 
