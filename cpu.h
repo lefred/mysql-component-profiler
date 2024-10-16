@@ -24,4 +24,5 @@
 
 #include "common.h"
 #include <gperftools/profiler.h>
+#include "profiler_service.h"
 

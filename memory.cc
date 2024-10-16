@@ -423,13 +423,13 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
     *is_null = 1;
     return 0;
   }
-  LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, "Turiship1");
+
   char variable_value[1024];
   char *p_variable_value;
   size_t value_length = sizeof(variable_value) - 1;
 
   p_variable_value = &variable_value[0];
-  LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, "Turiship2");
+
   if (mysql_service_profiler_var->get("pprof_binary", p_variable_value, &value_length)) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
@@ -438,14 +438,11 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
     *is_null = 1;
     return 0;
   }
-  LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, "Turiship3");
-  LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, p_variable_value);
 
   std::string buf; 
   buf = exec_pprof((std::string(p_variable_value) + " --" +  report_type + " "
                  + mysqld_binary + " " + memprof_dump_path + "*.heap").c_str());
 
-  LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, "Turiship4");
   outp = (char *)malloc(buf.length() + 1); 
   if (outp == nullptr) {
       *error = 1;
@@ -526,22 +523,6 @@ static mysql_service_status_t profiler_memory_service_deinit() {
   if (list->unregister()) return 1; /* failure: some UDFs still in use */
 
   delete list;
-  if (mysql_service_component_sys_variable_unregister->unregister_variable(
-              "profiler", "dump_path")) {
-    LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
-              "could not unregister variable 'profiler.dump_path'.");
-  } else {
-    LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-              "variable 'profiler.dump_path' is now unregistered successfully.");
-  }
-  if (mysql_service_component_sys_variable_unregister->unregister_variable(
-              "profiler", "pprof_binary")) {
-    LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
-              "could not unregister variable 'profiler.pprof_binary'.");
-  } else {
-    LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-              "variable 'profiler.pprof_binary' is now unregistered successfully.");
-  }
 
   unregister_status_variables();
 

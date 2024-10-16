@@ -38,6 +38,7 @@ REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_register);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
 REQUIRES_SERVICE_PLACEHOLDER(status_variable_registration);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
+REQUIRES_SERVICE_PLACEHOLDER(profiler_var);
 
 
 SERVICE_TYPE(log_builtins) * log_bi;
@@ -45,10 +46,8 @@ SERVICE_TYPE(log_builtins_string) * log_bs;
 
 static char cpuprof_status[] = "STOPPED";
 
-// Buffer for the value of the memprof.dump_path global variable
-static char *memprof_dump_path_value;
-// Buffer for the value of the memprof.pprof_path global variable
-static char *pprof_path_value;
+// Buffer for the value of the profiler.dump_path global variable
+std::string cpuprof_dump_path;
 
 static SHOW_VAR cpuprof_status_variables[] = {
   {"profiler.cpu_status", (char *)&cpuprof_status, SHOW_CHAR,
@@ -175,7 +174,23 @@ const char *cpuprof_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     return 0;
   }
 
-  std::string filePath = std::string(memprof_dump_path_value) + ".prof";
+  char variable_value[1024];
+  char *p_variable_value;
+  size_t value_length = sizeof(variable_value) - 1;
+
+  p_variable_value = &variable_value[0];
+  if (mysql_service_profiler_var->get("dump_path", p_variable_value, &value_length)) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "Impossible to get the value of the global variable profiler.dump_path");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
+  cpuprof_dump_path = variable_value;
+
+  std::string filePath = cpuprof_dump_path + ".prof";
+
   // Check if there is something already existing
   if (fileExists(filePath)) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
@@ -334,9 +349,25 @@ const char *pprof_cpu_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
     *is_null = 1;
     return 0;
   }
+
+  char variable_value[1024];
+  char *p_variable_value;
+  size_t value_length = sizeof(variable_value) - 1;
+
+  p_variable_value = &variable_value[0];
+
+  if (mysql_service_profiler_var->get("pprof_binary", p_variable_value, &value_length)) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "Impossible to get the value of the global variable profiler.pprof_binary");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
+
   std::string buf;
-  buf = exec_pprof((std::string(pprof_path_value) + " --" +  report_type + " "
-                 + mysqld_binary + " " + std::string(memprof_dump_path_value) + ".prof").c_str());
+  buf = exec_pprof((std::string(p_variable_value) + " --" +  report_type + " "
+                 + mysqld_binary + " " + cpuprof_dump_path + ".prof").c_str());
 
   outp = (char *)malloc(buf.length() + 1);
   if (outp == nullptr) {
@@ -409,7 +440,6 @@ static mysql_service_status_t profiler_cpu_service_deinit() {
 
   delete list;
 
-  pprof_path_value = nullptr;
   unregister_status_variables();
 
   LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, "uninstalled.");
@@ -434,6 +464,7 @@ BEGIN_COMPONENT_REQUIRES(profiler_cpu_service)
     REQUIRES_SERVICE(udf_registration),
     REQUIRES_SERVICE(mysql_runtime_error), 
     REQUIRES_SERVICE(mysql_system_variable_reader),
+    REQUIRES_SERVICE(profiler_var),
 END_COMPONENT_REQUIRES();
 
 /* A list of metadata to describe the Component. */
