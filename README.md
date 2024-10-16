@@ -1,42 +1,61 @@
 # mysql-component-profiler
 
-This component extend MySQL providing profiler capabilities using gperftools (https://github.com/gperftools/gperftools).
+This is component collection to extend MySQL providing profiler capabilities using gperftools (https://github.com/gperftools/gperftools).
 
-When using tcmalloc, you have the possibility to profile the memory. 
+When using tcmalloc, you have the possibility to profile the memory, the CPU or both. 
 
 The component uses `pprof` to generate text reports or dot output.
 
 ## installation & prerequisities
 
-To install the component copy the `component_profiler.so` file into the plugins directory, `/usr/lib64/mysql/plugin/` on Oracle Linux.
+There are 3 components:
+
+- `component_profiler.so`: the main one. It's a dependency of the other ones 
+- `component_profiler_memory.so`: to profile memory. It requires `component_profiler.so` to be installed.
+- `component_profiler_cpu.so`: to porfile CPU. It requires `component_profiler.so` to be installed.
+
+`component_profiler_cpu.so` and `component_profiler_memory.so` can be installed independently.
+
+To install the components copy the `component_profiler.so` and the memory and/or cpu files into the plugins directory, `/usr/lib64/mysql/plugin/` on Oracle Linux.
 
 ```
 MySQL > install component 'file://component_profiler';
 Query OK, 0 rows affected (0.0017 sec)
 
+MySQL > install component 'file://component_profiler_cpu';
+Query OK, 0 rows affected (0.0017 sec)
+
+MySQL > install component 'file://component_profiler_memory';
+Query OK, 0 rows affected (0.0017 sec)
+
 MySQL > select * from mysql.component;
-+--------------+--------------------+---------------------------+
-| component_id | component_group_id | component_urn             |
-+--------------+--------------------+---------------------------+
-|            1 |                  1 | file://component_profiler |
-+--------------+--------------------+---------------------------+
-1 row in set (0.0006 sec)
++--------------+--------------------+----------------------------------+
+| component_id | component_group_id | component_urn                    |
++--------------+--------------------+----------------------------------+
+|            1 |                  1 | file://component_profiler        |
+|            2 |                  2 | file://component_profiler_cpu    |
+|            3 |                  3 | file://component_profiler_memory |
++--------------+--------------------+----------------------------------+
+3 rows in set (0.0006 sec)
 ```
 
-During the installation of the component, the following lines will be added in the error log:
+During the installation of the components, the following lines will be added in the error log:
 
 ```
-2024-10-14T16:24:28.251951Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'initializing…'
-2024-10-14T16:24:28.251988Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new UDF 'memprof_start()' has been registered successfully.'
-2024-10-14T16:24:28.252005Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new UDF 'cpuprof_start()' has been registered successfully.'
-2024-10-14T16:24:28.252017Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new UDF 'memprof_stop()' has been registered successfully.'
-2024-10-14T16:24:28.252027Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new UDF 'cpuprof_stop()' has been registered successfully.'
-2024-10-14T16:24:28.252037Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new UDF 'memprof_dump()' has been registered successfully.'
-2024-10-14T16:24:28.252048Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new UDF 'memprof_report()' has been registered successfully.'
-2024-10-14T16:24:28.252058Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new UDF 'cpuprof_report()' has been registered successfully.'
-2024-10-14T16:24:28.252139Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.dump_path' has been registered successfully.'
-2024-10-14T16:24:28.252195Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.pprof_binary' has been registered successfully.'
-2024-10-14T16:24:28.252269Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'Status variable(s) registered'
+2024-10-16T16:24:39.404023Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'initializing…'
+2024-10-16T16:24:39.404131Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.dump_path' has been registered successfully.'
+2024-10-16T16:24:39.404200Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.pprof_binary' has been registered successfully.'
+2024-10-16T16:24:41.536139Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'initializing…'
+2024-10-16T16:24:41.536184Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_start()' has been registered successfully.'
+2024-10-16T16:24:41.536202Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_stop()' has been registered successfully.'
+2024-10-16T16:24:41.536220Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_report()' has been registered successfully.'
+2024-10-16T16:24:41.536271Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'Status variable(s) registered'
+2024-10-16T16:32:15.037022Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'initializing…'
+2024-10-16T16:32:15.037071Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_start()' has been registered successfully.'
+2024-10-16T16:32:15.037095Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_stop()' has been registered successfully.'
+2024-10-16T16:32:15.037114Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_dump()' has been registered successfully.'
+2024-10-16T16:32:15.037133Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_report()' has been registered successfully.'
+2024-10-16T16:32:15.037203Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'Status variable(s) registered
 ```
 
 As we can see several UDFs were created:
@@ -338,6 +357,15 @@ $ dot -Tpng memory.dot -o memory.png
 ![Memory](examples/memory.png)
 
 ## errors, warnings, messages
+
+### dependency
+
+When installing `component_profiler_cpu` or `component_profiler_memory` if `component_profiler` is not installed, the following error is displayed: 
+
+```
+ERROR: 3534 (HY000): Cannot satisfy dependency for service 'profiler_var'
+required by component 'mysql:profiler_cpu_service'.
+```
 
 ### privilege
 
