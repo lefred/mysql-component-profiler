@@ -20,6 +20,8 @@
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#define LOG_COMPONENT_TAG "profiler"
+#define LOG_COMPONENT_TAG "profiler_cpu"
 
 #include "common.h"
+#include <gperftools/profiler.h>
+

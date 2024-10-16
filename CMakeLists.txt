@@ -6,6 +6,18 @@ MYSQL_ADD_COMPONENT(profiler
   profiler.cc
   MODULE_ONLY
   TEST_ONLY
-  #  LINK_LIBRARIES tcmalloc
 )
 
+MYSQL_ADD_COMPONENT(profiler_cpu
+  cpu.cc
+  MODULE_ONLY
+  TEST_ONLY
+  #  LINK_LIBRARIES profiler
+)
+
+MYSQL_ADD_COMPONENT(profiler_memory
+  memory.cc
+  MODULE_ONLY
+  TEST_ONLY
+  #  LINK_LIBRARIES tcmalloc
+)
