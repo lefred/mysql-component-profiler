@@ -1,6 +1,12 @@
 DISABLE_MISSING_PROFILE_WARNING()
+INCLUDE(mysql_version) 
+IF(${MAJOR_VERSION}  STREQUAL "8")
+   SET(ZLIB_EXTRA_VER, "zlib-1.2.13") 
+ELSE()
+   SET(ZLIB_EXTRA_VER, "zlib-1.3.1") 
+ENDIF()
 
-INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_SOURCE_DIR}/extra/rapidjson/include ${CMAKE_BINARY_DIR}/extra/zlib/zlib-1.3.1) 
+INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_SOURCE_DIR}/extra/rapidjson/include ${CMAKE_BINARY_DIR}/extra/zlib/${ZLIB_EXTRA_VER}) 
 
 MYSQL_ADD_COMPONENT(profiler
   profiler.cc
