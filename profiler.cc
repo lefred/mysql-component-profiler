@@ -36,8 +36,9 @@ REQUIRES_SERVICE_PLACEHOLDER(global_grants_check);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_runtime_error);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_register);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
+#if MYSQL_VERSION_ID >= 90000
 REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
-
+#endif
 
 SERVICE_TYPE(log_builtins) * log_bi;
 SERVICE_TYPE(log_builtins_string) * log_bs;
@@ -269,7 +270,9 @@ BEGIN_COMPONENT_REQUIRES(profiler_service)
     REQUIRES_SERVICE(global_grants_check),
     REQUIRES_SERVICE(mysql_current_thread_reader),
     REQUIRES_SERVICE(mysql_runtime_error), 
+#if MYSQL_VERSION_ID >= 90000
     REQUIRES_SERVICE(mysql_system_variable_reader),
+#endif
 END_COMPONENT_REQUIRES();
 
 /* A list of metadata to describe the Component. */

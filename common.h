@@ -45,6 +45,8 @@
 #include <fstream>
 #include <unistd.h> // For access()
 
+#include "mysql_version.h" /* MYSQL_VERSION_ID */
+
 extern REQUIRES_SERVICE_PLACEHOLDER(log_builtins);
 extern REQUIRES_SERVICE_PLACEHOLDER(log_builtins_string);
 extern REQUIRES_SERVICE_PLACEHOLDER(udf_registration);
@@ -57,8 +59,9 @@ extern REQUIRES_SERVICE_PLACEHOLDER(mysql_runtime_error);
 extern REQUIRES_SERVICE_PLACEHOLDER(status_variable_registration);
 extern REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_register);
 extern REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
+#if MYSQL_VERSION_ID >= 90000
 extern REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
-
+#endif
 
 extern SERVICE_TYPE(log_builtins) * log_bi;
 extern SERVICE_TYPE(log_builtins_string) * log_bs;
@@ -138,13 +141,21 @@ bool get_profiler_variable(const char* variable_name, std::string* output) {
     size_t value_length = sizeof(variable_value) - 1;
 
     p_variable_value = &variable_value[0];
-
+    
+    #if MYSQL_VERSION_ID >= 90000
     if(mysql_service_mysql_system_variable_reader->get(
               nullptr, "GLOBAL", "profiler", variable_name,
               (void **)&p_variable_value, &value_length)) {
             LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "Failed to read the profiler variable");
             return 1;
     }
+    #else
+    if (mysql_service_component_sys_variable_register->get_variable(
+          "profiler", variable_name, (void **)&p_variable_value, &value_length)) {
+            LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "Failed to read the profiler variable");
+            return 1;
+    }
+    #endif
  
     *output = variable_value;
     return 0;
@@ -161,12 +172,20 @@ bool get_mysqld(std::string* output) {
  
     p_pid_file = &pid_file[0];
 
+    #if MYSQL_VERSION_ID >= 90000
     if(mysql_service_mysql_system_variable_reader->get(
-	      nullptr, "GLOBAL", "mysql_server", "pid_file", 
+              nullptr, "GLOBAL", "mysql_server", "pid_file", 
               (void **)&p_pid_file, &value_length)) {
-	    LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "Failed to read pid_file system variable");
-	    return 1;
+            LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "Failed to read pid_file system variable");
+            return 1;
     }
+    #else
+    if (mysql_service_component_sys_variable_register->get_variable(
+          "mysql_server", "pid_file", (void **)&p_pid_file, &value_length)) {
+            LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "Failed to read pid_file system variable");
+            return 1;
+    }
+    #endif
 
     std::ifstream f(pid_file);
     if (!f.is_open()) {

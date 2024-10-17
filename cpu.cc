@@ -37,7 +37,9 @@ REQUIRES_SERVICE_PLACEHOLDER(mysql_runtime_error);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_register);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
 REQUIRES_SERVICE_PLACEHOLDER(status_variable_registration);
+#if MYSQL_VERSION_ID >= 90000
 REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
+#endif
 REQUIRES_SERVICE_PLACEHOLDER(profiler_var);
 
 
@@ -463,7 +465,9 @@ BEGIN_COMPONENT_REQUIRES(profiler_cpu_service)
     REQUIRES_SERVICE(mysql_udf_metadata), 
     REQUIRES_SERVICE(udf_registration),
     REQUIRES_SERVICE(mysql_runtime_error), 
+#if MYSQL_VERSION_ID >= 90000
     REQUIRES_SERVICE(mysql_system_variable_reader),
+#endif
     REQUIRES_SERVICE(profiler_var),
 END_COMPONENT_REQUIRES();
 
