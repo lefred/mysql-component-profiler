@@ -1,6 +1,6 @@
 DISABLE_MISSING_PROFILE_WARNING()
 
-INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_SOURCE_DIR}/extra/rapidjson/include ${CMAKE_SOURCE_DIR}/extra/zlib/zlib-1.3.1) 
+INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_SOURCE_DIR}/extra/rapidjson/include ${CMAKE_BINARY_DIR}/extra/zlib/zlib-1.3.1) 
 
 MYSQL_ADD_COMPONENT(profiler
   profiler.cc
