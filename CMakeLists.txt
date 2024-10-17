@@ -6,6 +6,7 @@ MYSQL_ADD_COMPONENT(profiler
   profiler.cc
   MODULE_ONLY
   TEST_ONLY
+  LINK_LIBRARIES extra:rapidjson
 )
 
 MYSQL_ADD_COMPONENT(profiler_cpu
@@ -19,5 +20,5 @@ MYSQL_ADD_COMPONENT(profiler_memory
   memory.cc
   MODULE_ONLY
   TEST_ONLY
-  LINK_LIBRARIES extra:rapidjson
+  #  LINK_LIBRARIES tcmalloc
 )
