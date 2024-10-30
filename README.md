@@ -560,7 +560,7 @@ We can use the file to generate an image:
 ```
 $ dot -Tpng jemalloc.dot -o jemalloc.png
 ```
-![Memory](examples/jemalloc.png.png)
+![Memory](examples/jemalloc.png)
 
 
 ## errors, warnings, messages
