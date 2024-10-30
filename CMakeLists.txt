@@ -28,3 +28,11 @@ MYSQL_ADD_COMPONENT(profiler_memory
   TEST_ONLY
   #  LINK_LIBRARIES tcmalloc
 )
+
+MYSQL_ADD_COMPONENT(profiler_jemalloc_memory
+  jemalloc_memory.cc
+  MODULE_ONLY
+  TEST_ONLY
+  #  LINK_LIBRARIES tcmalloc
+)
+
