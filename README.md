@@ -1,22 +1,27 @@
 # mysql-component-profiler
 
-This is component collection to extend MySQL providing profiler capabilities using gperftools (https://github.com/gperftools/gperftools).
+This is component collection to extend MySQL providing capabilities using gperftools (https://github.com/gperftools/gperftools).
 
 When using tcmalloc, you have the possibility to profile the memory, the CPU or both. 
 
-The component uses `pprof` to generate text reports or dot output.
+When using jemalloc, you have the possibility to profile the memory.
+
+The component uses `pprof` to generate text reports or dot output for tcmalloc and `jeprof` for jemalloc.
 
 ## installation & prerequisities
 
-There are 3 components:
+There are 4 components:
 
 - `component_profiler.so`: the main one. It's a dependency of the other ones 
-- `component_profiler_memory.so`: to profile memory. It requires `component_profiler.so` to be installed.
 - `component_profiler_cpu.so`: to porfile CPU. It requires `component_profiler.so` to be installed.
+- `component_profiler_memory.so`: to profile memory. It requires `component_profiler.so` to be installed.
+- `component_profiler_jemalloc_memory.so`: to profile memory. It requires `component_profiler.so` to be installed.
 
-`component_profiler_cpu.so` and `component_profiler_memory.so` can be installed independently.
+`component_profiler_cpu.so`, `component_profiler_memory.so` and `component_profiler_jemalloc_memory.so` can be installed independently.
 
 To install the components copy the `component_profiler.so` and the memory and/or cpu files into the plugins directory, `/usr/lib64/mysql/plugin/` on Oracle Linux.
+
+### when using tcmalloc
 
 ```
 MySQL > install component 'file://component_profiler';
@@ -76,30 +81,86 @@ MySQL > SELECT UDF_NAME FROM performance_schema.user_defined_functions where udf
 7 rows in set (0.0007 sec)
 ```
 
-To use the component, the user needs to have the `SENSITIVE_VARIABLES_OBSERVER` privilege granted.
+### when using jemalloc
+
+```
+MySQL > install component 'file://component_profiler';
+Query OK, 0 rows affected (0.0017 sec)
+
+MySQL > install component 'file://component_profiler_jemalloc_memory';
+Query OK, 0 rows affected (0.0015 sec)
+
+MySQL > select * from mysql.component;
++--------------+--------------------+-------------------------------------------+
+| component_id | component_group_id | component_urn                             |
++--------------+--------------------+-------------------------------------------+
+|            1 |                  1 | file://component_profiler                 |
+|            2 |                  2 | file://component_profiler_jemalloc_memory |
++--------------+--------------------+-------------------------------------------+
+2 rows in set (0.0009 sec)
+```
+
+During the installation of the components, the following lines will be added in the error log:
+
+```
+2024-10-30T22:52:08.981065Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'initializing…'
+2024-10-30T22:52:08.981240Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.dump_path' has been registered successfully.'
+2024-10-30T22:52:08.981338Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.pprof_binary' has been registered successfully.'
+2024-10-30T22:52:15.324135Z 8 [Note] [MY-011071] [Server] Component profiler_jemalloc_memory reported: 'initializing…'
+2024-10-30T22:52:15.324217Z 8 [Note] [MY-011071] [Server] Component profiler_jemalloc_memory reported: 'new UDF 'memprof_jemalloc_start()' has been registered successfully.'
+2024-10-30T22:52:15.324245Z 8 [Note] [MY-011071] [Server] Component profiler_jemalloc_memory reported: 'new UDF 'memprof_jemalloc_stop()' has been registered successfully.'
+2024-10-30T22:52:15.324265Z 8 [Note] [MY-011071] [Server] Component profiler_jemalloc_memory reported: 'new UDF 'memprof_jemalloc_dump()' has been registered successfully.'
+2024-10-30T22:52:15.324284Z 8 [Note] [MY-011071] [Server] Component profiler_jemalloc_memory reported: 'new UDF 'memprof_jemalloc_report()' has been registered successfully.'
+2024-10-30T22:52:15.324354Z 8 [Note] [MY-011071] [Server] Component profiler_jemalloc_memory reported: 'Status variable(s) registered'
+2024-10-30T22:52:15.324463Z 8 [Note] [MY-011071] [Server] Component profiler_jemalloc_memory reported: 'new variable 'profiler.jeprof_binary' has been registered successfully.
+```
+
+As we can see several UDFs were created:
+
+```
+SELECT UDF_NAME FROM performance_schema.user_defined_functions where udf_name like '%PROF_%';
++-------------------------+
+| UDF_NAME                |
++-------------------------+
+| MEMPROF_JEMALLOC_REPORT |
+| MEMPROF_JEMALLOC_STOP   |
+| MEMPROF_JEMALLOC_START  |
+| MEMPROF_JEMALLOC_DUMP   |
++-------------------------+
+4 rows in set (0.0007 sec)
+```
+
+To use the components, the user needs to have the `SENSITIVE_VARIABLES_OBSERVER` privilege granted.
 
 ## global variables
 
 ```
-show global variables like 'profiler.%';
-+-----------------------+-----------------+
-| Variable_name         | Value           |
-+-----------------------+-----------------+
-| profiler.dump_path    | /tmp/dimk/mysql |
-| profiler.pprof_binary | /usr/bin/pprof  |
-+-----------------------+-----------------+
-2 rows in set (0.0011 sec)
+MySQL > show global variables like 'profiler.%';
++------------------------+--------------------+
+| Variable_name          | Value              |
++------------------------+--------------------+
+| profiler.dump_path     | /tmp/mysql.memprof |
+| profiler.jeprof_binary | /usr/bin/jeprof    |
+| profiler.pprof_binary  | /usr/bin/pprof     |
++------------------------+--------------------+
+3 rows in set (0.0045 sec)
 ```
 
 ### profiler.dump_path
 
 This defines where the collected data should be dumped on the server.
 
+### profiler.jeprof_binary
+
+This variable is installed by `component_profiler_jemalloc_memory` and defines where the `jeprof` binary is installed.
+
 ### profiled.pprof_binary
 
 The only way to parse the collected data is the use the `pprof` program. This variables defines where is installed the pprof binary executable file.
 
 ## status variables
+
+### tcmalloc
 
 ```
 MySQL > show status like 'profiler.%';
@@ -110,6 +171,17 @@ MySQL > show status like 'profiler.%';
 | profiler.memory_status | STOPPED |
 +------------------------+---------+
 2 rows in set (0.0107 sec)
+```
+### jemalloc
+
+```
+MySQL > show global status like 'profiler%';
++---------------------------------+---------+
+| Variable_name                   | Value   |
++---------------------------------+---------+
+| profiler.jemalloc_memory_status | STOPPED |
++---------------------------------+---------+
+1 row in set (0.0009 sec)
 ```
 
 These status variables provides the status of the profiling operations.
@@ -217,7 +289,7 @@ $ dot -Tpng cpu.dot -o cpu.png
 
 ![CPU](examples/cpu.png)
 
-## Memory profiling
+## Memory profiling - tcmalloc
 
 ### start
 
@@ -356,11 +428,146 @@ $ dot -Tpng memory.dot -o memory.png
 ```
 ![Memory](examples/memory.png)
 
+## Memory profiling - jemalloc
+
+### start
+
+To start the profiling, we need to use the following statement:
+
+```
+MySQL > select memprof_jemalloc_start();
++--------------------------+
+| memprof_jemalloc_start() |
++--------------------------+
+| memory profiling started |
++--------------------------+
+1 row in set (0.0002 sec)
+```
+
+We can confirm this from the status variable:
+
+```
+MySQL > show status like 'profiler.jemalloc_memory_status';
++---------------------------------+---------+
+| Variable_name                   | Value   |
++---------------------------------+---------+
+| profiler.jemalloc_memory_status | RUNNING |
++---------------------------------+---------+
+1 row in set (0.0071 sec)
+```
+
+### dump
+
+As for tcmalloc, we have to dump the collected data for the memory
+to disk manually:
+
+```
+MySQL > select memprof_jemalloc_dump();
++------------------------------+
+| memprof_jemalloc_dump()      |
++------------------------------+
+| memory profiling data dumped |
++------------------------------+
+1 row in set (0.0027 sec)
+```
+
+We need to dump at the data we want to use for the reporting. Starting and stopping without dumping, won't produce
+any file to parse.
+
+We can see in error log:
+
+```
+Using local file /home/fred/workspace/mysql-server/BIN-DEBUG/runtime_output_directory/mysqld.
+Using local file /tmp/mysql.memprof.0001.heap.
+```
+
+And on the filesystem:
+
+```
+$ ls -lh /tmp/*heap
+-rw-r----- 1 fred fred 92K Oct 30 23:52 /tmp/mysql.memprof.0001.heap
+```
+
+### stop
+
+Before being able to generate a report, we need to stop the memory profiling:
+
+```
+MySQL > select memprof_jemalloc_stop();
++--------------------------+
+| memprof_jemalloc_stop()  |
++--------------------------+
+| memory profiling stopped |
++--------------------------+
+1 row in set (0.0005 sec) 
+```
+
+### report
+
+Now we can generate a report for the memory in two format: TEXT (the default) or DOT.
+
+#### text
+
+To generate the report we use the following statement:
+
+```
+MySQL > select memprof_jemalloc_report()\G
+*************************** 1. row ***************************
+memprof_jemalloc_report(): Total: 368.6 MB
+   139.6  37.9%  37.9%    139.6  37.9% pfs_malloc
+   125.1  33.9%  71.8%    125.1  33.9% ut::detail::malloc (inline)
+    75.7  20.5%  92.4%     75.7  20.5% ut::detail::calloc (inline)
+    22.5   6.1%  98.5%     22.5   6.1% void* my_internal_malloc [clone .lto_priv.0] (inline)
+     3.1   0.8%  99.3%      3.1   0.8% operator delete[]
+     1.5   0.4%  99.7%      1.5   0.4% my_once_alloc
+     0.5   0.1%  99.9%      0.5   0.1% std::__to_chars_bfloat16_t@@GLIBCXX_3.4.31
+     0.5   0.1% 100.0%      0.5   0.1% my_openssl_malloc (inline)
+     0.0   0.0% 100.0%      0.5   0.1% ::DDSE_dict_recover
+     0.0   0.0% 100.0%      1.5   0.4% ::store_plugin_and_referencing_views_metadata
+     0.0   0.0% 100.0%      0.5   0.1% AIO::AIO
+     0.0   0.0% 100.0%      0.5   0.1% AIO::create
+     0.0   0.0% 100.0%      0.5   0.1% AIO::start
+     0.0   0.0% 100.0%      0.8   0.2% Acl_cache_lock_guard::lock [clone .part.0]
+     0.0   0.0% 100.0%     20.0   5.4% Buf_flush_list_added_lsns::Buf_flush_list_added_lsns (inline)
+     0.0   0.0% 100.0%     20.0   5.4% Buf_flush_list_added_lsns::create
+     0.0   0.0% 100.0%      0.5   0.1% CRYPTO_malloc@@OPENSSL_3.0.0
+     0.0   0.0% 100.0%      0.5   0.1% CRYPTO_zalloc@@OPENSSL_3.0.0
+     0.0   0.0% 100.0%      1.5   0.4% Clone_persist_gtid::flush_gtids
+     0.0   0.0% 100.0%      1.5   0.4% Clone_persist_gtid::periodic_write
+     0.0   0.0% 100.0%      0.5   0.1% Cost_constant_cache::reload
+     0.0   0.0% 100.0%      0.5   0.1% Datafile::read_first_page
+     0.0   0.0% 100.0%      1.5   0.4% Detached_thread::operator (inline)
+     0.0   0.0% 100.0%      7.6   2.0% Double_write::Double_write
+     0.0   0.0% 100.0%      7.6   2.0% Double_write::create_v2
+     0.0   0.0% 100.0%     58.1  15.8% Double_write::load
+     0.0   0.0% 100.0%      0.5   0.1% EVP_CIPHER_fetch@@OPENSSL_3.0.0
+     0.0   0.0% 100.0%      1.0   0.3% Events::init 
+...
+1 row in set (5.0192 sec)
+```
+
+#### dot
+
+We can generate the ouput in dot format:
+
+```
+MySQL > select memprof_jemalloc_report('dot') into outfile 'jemalloc.dot';
+Query OK, 1 row affected (4.7576 sec)
+```
+
+We can use the file to generate an image:
+
+```
+$ dot -Tpng jemalloc.dot -o jemalloc.png
+```
+![Memory](examples/jemalloc.png.png)
+
+
 ## errors, warnings, messages
 
 ### dependency
 
-When installing `component_profiler_cpu` or `component_profiler_memory` if `component_profiler` is not installed, the following error is displayed: 
+When installing `component_profiler_cpu`, `component_profiler_memory` or `component_profiler_jemalloc_memory`, if `component_profiler` is not installed, the following error is displayed: 
 
 ```
 ERROR: 3534 (HY000): Cannot satisfy dependency for service 'profiler_var'
@@ -429,3 +636,20 @@ For CPU profiling, you need to use one of those:
 - `libprofiler.so`
 - `libtcmalloc_and_profiler.so`
 
+### jemalloc
+
+The `jemalloc` library used needs to support profiling. It needs to have been compiled with `--enable-prof`, you can check by using the following command:
+
+```
+$ jemalloc-config --config | grep prof
+```
+
+If you get `--enable-prof` then it means it's OK. If not, you need to compile `jmalloc` or ask me for an rpm ;)
+
+MySQL needs also to be started using `LD_PRELOAD=/usr/lib64/libjemalloc.so` and the profiling must be enabled using `MALLOC_CONF="prof:true"`,
+if not it won't work and you will get the following error:
+
+```
+ERROR: 1126 (HY000): Can't open shared library '/home/fred/workspace/mysql-server/BIN-DEBUG/lib/plugin/component_profiler_jemalloc_memory.so'`
+(errno: 0 /home/fred/workspace/mysql-server/BIN-DEBUG/lib/plugin/component_profiler_jemalloc_memory.so: undefined symbol: mallctl)
+```
