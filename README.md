@@ -154,7 +154,7 @@ This defines where the collected data should be dumped on the server.
 
 This variable is installed by `component_profiler_jemalloc_memory` and defines where the `jeprof` binary is installed.
 
-### profiled.pprof_binary
+### profiler.pprof_binary
 
 The only way to parse the collected data is the use the `pprof` program. This variables defines where is installed the pprof binary executable file.
 
