@@ -41,12 +41,14 @@ REQUIRES_SERVICE_PLACEHOLDER(status_variable_registration);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
 #endif
 REQUIRES_SERVICE_PLACEHOLDER(profiler_var);
+REQUIRES_SERVICE_PLACEHOLDER(profiler_pfs);
 
 
 SERVICE_TYPE(log_builtins) * log_bi;
 SERVICE_TYPE(log_builtins_string) * log_bs;
 
 static char memprof_status[] = "STOPPED";
+int dump_count = 1;
 
 // Buffer for the value of the profiler.dump_path global variable
 std::string memprof_dump_path;
@@ -203,9 +205,18 @@ const char *memprof_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     return 0;
   }
 
+  if (strcmp(memprof_status, "STOPPED") != 0) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "tcmalloc memory profiler is already running.");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
   HeapProfilerStart(memprof_dump_path.c_str());
 
   strcpy(memprof_status, "RUNNING");
+  mysql_service_profiler_pfs->add("memory", "tcmalloc", "started", "");
 
   strcpy(outp, "memory profiling started");
   *length = strlen(outp);
@@ -257,10 +268,21 @@ const char *memprof_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     *is_null = 1;
     return 0;
   }
+  
+  if (strcmp(memprof_status, "STOPPED") == 0) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "tcmalloc memory profiler is not running.");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
 
   HeapProfilerStop();
 
   strcpy(memprof_status, "STOPPED");
+
+  mysql_service_profiler_pfs->add("memory", "tcmalloc", "stopped", "");
 
   strcpy(outp, "memory profiling stopped");
   *length = strlen(outp);
@@ -331,9 +353,19 @@ const char *memprof_dump_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   	strcpy(memprof_status, "RUNNING");
         HeapProfilerDump(buf);
         strcpy(outp, "memory profiling data dumped");
+        std::ostringstream filename;
+        filename << memprof_dump_path << "."  << std::setw(4) << std::setfill('0') << dump_count << ".heap";
+        std::string filePath = filename.str();
+        mysql_service_profiler_pfs->add("memory", "tcmalloc", "dumped", filePath.c_str()); 
+        ++dump_count;
   } else {
   	strcpy(memprof_status, "STOPPED");
-        strcpy(outp, "memory profiling is not started");
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "tcmalloc memory profiler is not running.");
+    *error = 1;
+    *is_null = 1;
+    return 0;
   }
 
   *length = strlen(outp);
@@ -451,6 +483,8 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
       *is_null = 1;
       return nullptr;
   }
+  mysql_service_profiler_pfs->add("memory", "tcmalloc", "report", report_type.c_str()); 
+
   strcpy(outp, buf.c_str());
   *length = strlen(outp);
 
@@ -553,6 +587,7 @@ BEGIN_COMPONENT_REQUIRES(profiler_memory_service)
     REQUIRES_SERVICE(mysql_system_variable_reader),
 #endif
     REQUIRES_SERVICE(profiler_var),
+    REQUIRES_SERVICE(profiler_pfs),
 END_COMPONENT_REQUIRES();
 
 /* A list of metadata to describe the Component. */

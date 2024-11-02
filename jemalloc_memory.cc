@@ -41,7 +41,7 @@ REQUIRES_SERVICE_PLACEHOLDER(status_variable_registration);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
 #endif
 REQUIRES_SERVICE_PLACEHOLDER(profiler_var);
-
+REQUIRES_SERVICE_PLACEHOLDER(profiler_pfs);
 
 SERVICE_TYPE(log_builtins) * log_bi;
 SERVICE_TYPE(log_builtins_string) * log_bs;
@@ -275,10 +275,19 @@ const char *memprof_jemalloc_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     *is_null = 1;
     return 0;
   }
-
+  if (strcmp(memprof_jemalloc_status, "STOPPED") != 0) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "jemalloc memory profiler is already running.");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
   strcpy(memprof_jemalloc_status, "RUNNING");
 
   strcpy(outp, "memory profiling started");
+  mysql_service_profiler_pfs->add("memory", "jemalloc", "started", "");
+
   *length = strlen(outp);
 
   return const_cast<char *>(outp);
@@ -328,6 +337,14 @@ const char *memprof_jemalloc_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     *is_null = 1;
     return 0;
   }
+  if (strcmp(memprof_jemalloc_status, "STOPPED") == 0) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "jemalloc memory profiler is not running.");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
 
   bool active = false;
   if (mallctl("prof.active", nullptr, nullptr, &active, sizeof(active)) != 0) 
@@ -341,6 +358,7 @@ const char *memprof_jemalloc_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
   }
 
   strcpy(memprof_jemalloc_status, "STOPPED");
+  mysql_service_profiler_pfs->add("memory", "jemalloc", "stopped", "");
 
   strcpy(outp, "memory profiling stopped");
   *length = strlen(outp);
@@ -358,7 +376,7 @@ static bool memprof_jemalloc_dump_udf_init(UDF_INIT *initid, UDF_ARGS *args, cha
                                     "this function doesn't require any parameter");
     return true;
   }
-  if (std::strcmp(memprof_jemalloc_status, "STOPPED") == 0) {
+  if (strcmp(memprof_jemalloc_status, "STOPPED") == 0) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
                                     "jemalloc memory profiler is not running, you need to start it first.");
@@ -410,6 +428,7 @@ const char *memprof_jemalloc_dump_udf(UDF_INIT *, UDF_ARGS *, char *outp,
         strcpy(outp, "error dumping profile");
   } else {
         strcpy(outp, "memory profiling data dumped");
+        mysql_service_profiler_pfs->add("memory", "jemalloc", "dumped", filePath.c_str()); 
         ++dump_count;
   }
 
@@ -484,7 +503,7 @@ const char *jeprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   }
 
 
-  if (std::strcmp(memprof_jemalloc_status, "STOPPED") != 0) {
+  if (strcmp(memprof_jemalloc_status, "STOPPED") != 0) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
                                     "jemalloc memory profiler is still running, you need to stop it first.");
@@ -528,6 +547,9 @@ const char *jeprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
       *is_null = 1;
       return nullptr;
   }
+
+  mysql_service_profiler_pfs->add("memory", "jemalloc", "report", report_type.c_str()); 
+
   strcpy(outp, buf.c_str());
   *length = strlen(outp);
 
@@ -658,6 +680,7 @@ BEGIN_COMPONENT_REQUIRES(profiler_jemalloc_memory_service)
     REQUIRES_SERVICE(mysql_system_variable_reader),
 #endif
     REQUIRES_SERVICE(profiler_var),
+    REQUIRES_SERVICE(profiler_pfs),
 END_COMPONENT_REQUIRES();
 
 /* A list of metadata to describe the Component. */

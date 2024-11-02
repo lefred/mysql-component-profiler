@@ -41,7 +41,7 @@ REQUIRES_SERVICE_PLACEHOLDER(status_variable_registration);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
 #endif
 REQUIRES_SERVICE_PLACEHOLDER(profiler_var);
-
+REQUIRES_SERVICE_PLACEHOLDER(profiler_pfs);
 
 SERVICE_TYPE(log_builtins) * log_bi;
 SERVICE_TYPE(log_builtins_string) * log_bs;
@@ -206,6 +206,7 @@ const char *cpuprof_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
   ProfilerStart(filePath.c_str());
 
   strcpy(cpuprof_status, "RUNNING");
+  mysql_service_profiler_pfs->add("cpu", "profiler", "started", filePath.c_str()); 
 
   strcpy(outp, "cpu profiling started");
   *length = strlen(outp);
@@ -261,6 +262,8 @@ const char *cpuprof_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
   ProfilerStop();
 
   strcpy(cpuprof_status, "STOPPED");
+  std::string filePath = cpuprof_dump_path + ".prof";
+  mysql_service_profiler_pfs->add("cpu", "profiler", "stopped", filePath.c_str()); 
 
   strcpy(outp, "cpu profiling stopped");
   *length = strlen(outp);
@@ -333,7 +336,7 @@ const char *pprof_cpu_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
           }
   }
 
-  if (std::strcmp(cpuprof_status, "RUNNING") == 0) {
+  if (strcmp(cpuprof_status, "RUNNING") == 0) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
                                     "cpu profiler is still running, you need to stop it first.");
@@ -377,6 +380,7 @@ const char *pprof_cpu_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
       *is_null = 1;
       return nullptr;
   }
+  mysql_service_profiler_pfs->add("cpu", "profiler", "report", report_type.c_str()); 
   strcpy(outp, buf.c_str());
   *length = strlen(outp);
 
@@ -469,6 +473,7 @@ BEGIN_COMPONENT_REQUIRES(profiler_cpu_service)
     REQUIRES_SERVICE(mysql_system_variable_reader),
 #endif
     REQUIRES_SERVICE(profiler_var),
+    REQUIRES_SERVICE(profiler_pfs),
 END_COMPONENT_REQUIRES();
 
 /* A list of metadata to describe the Component. */

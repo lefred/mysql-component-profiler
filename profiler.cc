@@ -24,8 +24,8 @@
 #define SIGNATURE_CHANGE 1
 
 #include "profiler.h"
+#include "profiler_pfs.h"
 #include "profiler_service.h"
-
 
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins);
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins_string);
@@ -39,10 +39,16 @@ REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
 #if MYSQL_VERSION_ID >= 90000
 REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
 #endif
+REQUIRES_MYSQL_MUTEX_SERVICE_PLACEHOLDER;
 
 SERVICE_TYPE(log_builtins) * log_bi;
 SERVICE_TYPE(log_builtins_string) * log_bs;
 
+PSI_mutex_key key_mutex_profiler_data = 0;
+PSI_mutex_info profiler_data_mutex[] = {
+  {&key_mutex_profiler_data, "profiler_data", PSI_FLAG_SINGLETON, PSI_VOLATILITY_PERMANENT,
+     "Profiler data, permanent mutex, singleton."}
+}; 
 
 static const char *DEFAULT_MEMPROF_DUMP_PATH = "/tmp/mysql.memprof";
 static const char *DEFAULT_PPROF_PATH = "/usr/bin/pprof";
@@ -51,6 +57,7 @@ static const char *DEFAULT_PPROF_PATH = "/usr/bin/pprof";
 static char *memprof_dump_path_value;
 // Buffer for the value of the memprof.pprof_path global variable
 static char *pprof_path_value;
+
 
 static int memprof_dump_path_check(MYSQL_THD thd,
                                        SYS_VAR *self MY_ATTRIBUTE((unused)),
@@ -199,6 +206,21 @@ static mysql_service_status_t profiler_service_init() {
     LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
                     "new variable 'profiler.pprof_binary' has been registered successfully.");
   }
+
+  mysql_mutex_init(key_mutex_profiler_data, &LOCK_profiler_data, nullptr);
+  init_profiler_share(&profiler_st_share);
+  init_profiler_data();
+  share_list[0] = &profiler_st_share;
+  if (mysql_service_pfs_plugin_table_v1->add_tables(&share_list[0], 
+                                                 share_list_count)) {
+    LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
+                    "PFS table has NOT been registered successfully!");
+    mysql_mutex_destroy(&LOCK_profiler_data);
+    return 1;
+  } else{
+    LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                    "PFS table has been registered successfully.");
+  }
   
   return result;
 }
@@ -206,10 +228,13 @@ static mysql_service_status_t profiler_service_init() {
 static mysql_service_status_t profiler_service_deinit() {
   mysql_service_status_t result = 0;
 
+  cleanup_profiler_data();
+
   if (mysql_service_component_sys_variable_unregister->unregister_variable(
               "profiler", "dump_path")) {
     LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
               "could not unregister variable 'profiler.dump_path'.");
+    return 1;
   } else {
     LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
               "variable 'profiler.dump_path' is now unregistered successfully.");
@@ -218,15 +243,29 @@ static mysql_service_status_t profiler_service_deinit() {
               "profiler", "pprof_binary")) {
     LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
               "could not unregister variable 'profiler.pprof_binary'.");
+    return 1;
   } else {
     LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
               "variable 'profiler.pprof_binary' is now unregistered successfully.");
+  }
+
+  if (mysql_service_pfs_plugin_table_v1->delete_tables(&share_list[0],
+                                                    share_list_count)) {
+    LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
+                    "Error while trying to remove PFS table");
+    return 1;
+  } else{
+    LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                    "PFS table has been removed successfully.");
   }
 
   memprof_dump_path_value = nullptr;
   pprof_path_value = nullptr;
 
   LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, "uninstalled.");
+
+  mysql_mutex_destroy(&LOCK_profiler_data);
+
 
   return result;
 }
@@ -252,12 +291,24 @@ DEFINE_BOOL_METHOD(get, (const char *szName, char *szOutValue, size_t *inoutSize
    return false;
 }
 
+DEFINE_BOOL_METHOD(add, (const char* profiler_type, const char* profiler_allocator, 
+                                const char* profiler_action, const char* profiler_filename)) {
+
+  addProfiler_element(time(nullptr), profiler_filename, profiler_type,
+                          profiler_allocator, profiler_action);
+  return false;
+}
+
 BEGIN_SERVICE_IMPLEMENTATION(profiler, profiler_var)
 get, END_SERVICE_IMPLEMENTATION();
+
+BEGIN_SERVICE_IMPLEMENTATION(profiler, profiler_pfs)
+add, END_SERVICE_IMPLEMENTATION();
 
 
 BEGIN_COMPONENT_PROVIDES(profiler_service)
   PROVIDES_SERVICE(profiler, profiler_var),
+  PROVIDES_SERVICE(profiler, profiler_pfs),
 END_COMPONENT_PROVIDES();
 
 BEGIN_COMPONENT_REQUIRES(profiler_service)
@@ -270,9 +321,13 @@ BEGIN_COMPONENT_REQUIRES(profiler_service)
     REQUIRES_SERVICE(global_grants_check),
     REQUIRES_SERVICE(mysql_current_thread_reader),
     REQUIRES_SERVICE(mysql_runtime_error), 
+    REQUIRES_SERVICE(pfs_plugin_table_v1),
+    REQUIRES_SERVICE_AS(pfs_plugin_column_string_v2, pfs_string),
+    REQUIRES_SERVICE_AS(pfs_plugin_column_timestamp_v2, pfs_timestamp),
 #if MYSQL_VERSION_ID >= 90000
     REQUIRES_SERVICE(mysql_system_variable_reader),
 #endif
+    REQUIRES_MYSQL_MUTEX_SERVICE,
 END_COMPONENT_REQUIRES();
 
 /* A list of metadata to describe the Component. */

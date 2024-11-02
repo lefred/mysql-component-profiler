@@ -9,7 +9,8 @@ ENDIF()
 INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_SOURCE_DIR}/extra/rapidjson/include ${CMAKE_BINARY_DIR}/extra/zlib/${ZLIB_EXTRA_VER}) 
 
 MYSQL_ADD_COMPONENT(profiler
-  profiler.cc
+  profiler.cc profiler_pfs.cc
+  common.cc
   MODULE_ONLY
   TEST_ONLY
   # LINK_LIBRARIES extra:rapidjson
@@ -17,6 +18,7 @@ MYSQL_ADD_COMPONENT(profiler
 
 MYSQL_ADD_COMPONENT(profiler_cpu
   cpu.cc
+  common.cc
   MODULE_ONLY
   TEST_ONLY
   #  LINK_LIBRARIES profiler
@@ -24,6 +26,7 @@ MYSQL_ADD_COMPONENT(profiler_cpu
 
 MYSQL_ADD_COMPONENT(profiler_memory
   memory.cc
+  common.cc
   MODULE_ONLY
   TEST_ONLY
   #  LINK_LIBRARIES tcmalloc
@@ -31,6 +34,7 @@ MYSQL_ADD_COMPONENT(profiler_memory
 
 MYSQL_ADD_COMPONENT(profiler_jemalloc_memory
   jemalloc_memory.cc
+  common.cc
   MODULE_ONLY
   TEST_ONLY
   #  LINK_LIBRARIES tcmalloc
