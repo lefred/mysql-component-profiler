@@ -50,6 +50,7 @@ During the installation of the components, the following lines will be added in 
 2024-10-16T16:24:39.404023Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'initializing…'
 2024-10-16T16:24:39.404131Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.dump_path' has been registered successfully.'
 2024-10-16T16:24:39.404200Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.pprof_binary' has been registered successfully.'
+2024-10-16T16:24:39.667589Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'PFS table has been registered successfully.'
 2024-10-16T16:24:41.536139Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'initializing…'
 2024-10-16T16:24:41.536184Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_start()' has been registered successfully.'
 2024-10-16T16:24:41.536202Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_stop()' has been registered successfully.'
@@ -562,6 +563,45 @@ $ dot -Tpng jemalloc.dot -o jemalloc.png
 ```
 ![Memory](examples/jemalloc.png)
 
+## performance_schema table - profiler_actions
+
+All actions are recorded in a `performance_schema` table called `profiler_actions`:
+
+### tcmalloc
+
+```
+MySQL > select * from performance_schema.profiler_actions;
++---------------------+-----------+--------+---------+------------------------------+-------------------+
+| LOGGED              | ALLOCATOR | TYPE   | ACTION  | FILENAME                     | EXTRA             |
++---------------------+-----------+--------+---------+------------------------------+-------------------+
+| 2024-11-03 15:51:54 | tcmalloc  | memory | started |                              |                   |
+| 2024-11-03 15:52:06 | tcmalloc  | memory | dumped  | /tmp/mysql.memprof.0001.heap | user request      |
+| 2024-11-03 15:52:13 | tcmalloc  | memory | dumped  | /tmp/mysql.memprof.0002.heap | after large query |
+| 2024-11-03 15:52:20 | tcmalloc  | memory | stopped |                              |                   |
+| 2024-11-03 15:52:35 | profiler  | cpu    | started | /tmp/mysql.memprof.prof      |                   |
+| 2024-11-03 15:52:42 | profiler  | cpu    | stopped | /tmp/mysql.memprof.prof      |                   |
+| 2024-11-03 15:53:47 | profiler  | cpu    | report  |                              | text              |
+| 2024-11-03 15:53:59 | tcmalloc  | memory | report  |                              | text              |
+| 2024-11-03 15:54:38 | tcmalloc  | memory | report  |                              | dot               |
++---------------------+-----------+--------+---------+------------------------------+-------------------+
+9 rows in set (0.0008 sec)
+```
+
+### jemalloc
+
+```
+MySQL > select * from performance_schema.profiler_actions;
++---------------------+-----------+--------+---------+------------------------------+-------+
+| LOGGED              | ALLOCATOR | TYPE   | ACTION  | FILENAME                     | EXTRA |
++---------------------+-----------+--------+---------+------------------------------+-------+
+| 2024-11-03 16:02:11 | jemalloc  | memory | started |                              |       |
+| 2024-11-03 16:02:23 | jemalloc  | memory | dumped  | /tmp/mysql.memprof.0001.heap |       |
+| 2024-11-03 16:02:29 | jemalloc  | memory | stopped |                              |       |
+| 2024-11-03 16:02:40 | jemalloc  | memory | report  |                              | text  |
+| 2024-11-03 16:02:48 | jemalloc  | memory | report  |                              | dot   |
++---------------------+-----------+--------+---------+------------------------------+-------+
+5 rows in set (0.0030 sec)
+```
 
 ## errors, warnings, messages
 
