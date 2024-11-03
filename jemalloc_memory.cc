@@ -356,7 +356,7 @@ const char *memprof_jemalloc_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     *is_null = 1;
     return 0;
   }
-
+ 
   strcpy(memprof_jemalloc_status, "STOPPED");
   mysql_service_profiler_pfs->add("memory", "jemalloc", "stopped", "", "");
 
@@ -370,12 +370,13 @@ const char *memprof_jemalloc_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
 // UDF to dump the memory profiling collected data
 
 static bool memprof_jemalloc_dump_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
-  if (args->arg_count > 0) {
+  if (args->arg_count > 1) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function doesn't require any parameter");
+                                    "this function requires none or 1 parameter");
     return true;
   }
+
   if (strcmp(memprof_jemalloc_status, "STOPPED") == 0) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
@@ -400,13 +401,15 @@ static void memprof_jemalloc_dump_udf_deinit(__attribute__((unused))
   assert(initid->ptr == udf_init || initid->ptr == my_udf);
 }
 
-const char *memprof_jemalloc_dump_udf(UDF_INIT *, UDF_ARGS *, char *outp,
+const char *memprof_jemalloc_dump_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
                                 unsigned long *length, char *is_null,
                                 char *error) {
   *error = 0;
   *is_null = 0;
 
   MYSQL_THD thd;
+
+  char buf[1024]="";
 
   mysql_service_mysql_current_thread_reader->get(&thd);
   if (!have_required_privilege(thd))
@@ -419,6 +422,12 @@ const char *memprof_jemalloc_dump_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     return 0;
   }
 
+  if (args->arg_count > 0) {
+	  strncpy(buf, args->args[0], args->lengths[0]);
+  } else {
+          strcpy(buf, "user request");
+  }
+
   std::ostringstream filename;
   filename << memprof_jemalloc_dump_path << "."  << std::setw(4) << std::setfill('0') << dump_count << ".heap";
   std::string filePath = filename.str();
@@ -428,7 +437,7 @@ const char *memprof_jemalloc_dump_udf(UDF_INIT *, UDF_ARGS *, char *outp,
         strcpy(outp, "error dumping profile");
   } else {
         strcpy(outp, "memory profiling data dumped");
-        mysql_service_profiler_pfs->add("memory", "jemalloc", "dumped", filePath.c_str(), ""); 
+        mysql_service_profiler_pfs->add("memory", "jemalloc", "dumped", filePath.c_str(), buf); 
         ++dump_count;
   }
 
