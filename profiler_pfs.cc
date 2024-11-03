@@ -41,7 +41,8 @@ void addProfiler_element(time_t profiler_timestamp,
                       std::string profiler_filename,
                       std::string profiler_type,
                       std::string profiler_allocator,
-                      std::string profiler_action
+                      std::string profiler_action,
+                      std::string profiler_extra
                       ) {
   size_t index;
   Profiler_record *record;
@@ -61,6 +62,7 @@ void addProfiler_element(time_t profiler_timestamp,
   record->profiler_type = profiler_type;
   record->profiler_allocator = profiler_allocator;
   record->profiler_action = profiler_action;
+  record->profiler_extra = profiler_extra;
 
   profiler_array[index] = record;
 
@@ -100,6 +102,7 @@ static void copy_record_profiler(Profiler_record *dest, const Profiler_record *s
   dest->profiler_type = source->profiler_type;
   dest->profiler_allocator = source->profiler_allocator;
   dest->profiler_action = source->profiler_action;
+  dest->profiler_extra = source->profiler_extra;
   return;
 }
 
@@ -173,6 +176,10 @@ int profiler_read_column_value(PSI_table_handle *handle, PSI_field *field,
       pfs_string->set_varchar_utf8mb4(field,
                                       h->current_row.profiler_filename.c_str());
       break;
+    case 5: /* EXTRA */
+      pfs_string->set_varchar_utf8mb4(field,
+                                      h->current_row.profiler_extra.c_str());
+      break;
     default: /* We should never reach here */
       assert(0);
       break;
@@ -188,7 +195,7 @@ void init_profiler_share(PFS_engine_table_share_proxy *share) {
   share->m_table_name_length = 16;
   share->m_table_definition =
       "`LOGGED` timestamp, `ALLOCATOR` VARCHAR(10), `TYPE` VARCHAR(8), "
-      "`ACTION` VARCHAR(8), `FILENAME` VARCHAR(255)";
+      "`ACTION` VARCHAR(8), `FILENAME` VARCHAR(255), `EXTRA` VARCHAR(100)";
   share->m_ref_length = sizeof(Profiler_POS);
   share->m_acl = READONLY;
   share->get_row_count = profiler_get_row_count;

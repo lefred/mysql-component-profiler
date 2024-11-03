@@ -29,5 +29,3 @@
 extern REQUIRES_SERVICE_PLACEHOLDER(pfs_plugin_table_v1);
 extern REQUIRES_SERVICE_PLACEHOLDER_AS(pfs_plugin_column_string_v2, pfs_string);
 extern REQUIRES_SERVICE_PLACEHOLDER_AS(pfs_plugin_column_timestamp_v2, pfs_timestamp);
-
-

@@ -286,7 +286,7 @@ const char *memprof_jemalloc_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
   strcpy(memprof_jemalloc_status, "RUNNING");
 
   strcpy(outp, "memory profiling started");
-  mysql_service_profiler_pfs->add("memory", "jemalloc", "started", "");
+  mysql_service_profiler_pfs->add("memory", "jemalloc", "started", "", "");
 
   *length = strlen(outp);
 
@@ -358,7 +358,7 @@ const char *memprof_jemalloc_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
   }
 
   strcpy(memprof_jemalloc_status, "STOPPED");
-  mysql_service_profiler_pfs->add("memory", "jemalloc", "stopped", "");
+  mysql_service_profiler_pfs->add("memory", "jemalloc", "stopped", "", "");
 
   strcpy(outp, "memory profiling stopped");
   *length = strlen(outp);
@@ -428,7 +428,7 @@ const char *memprof_jemalloc_dump_udf(UDF_INIT *, UDF_ARGS *, char *outp,
         strcpy(outp, "error dumping profile");
   } else {
         strcpy(outp, "memory profiling data dumped");
-        mysql_service_profiler_pfs->add("memory", "jemalloc", "dumped", filePath.c_str()); 
+        mysql_service_profiler_pfs->add("memory", "jemalloc", "dumped", filePath.c_str(), ""); 
         ++dump_count;
   }
 
@@ -548,7 +548,7 @@ const char *jeprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
       return nullptr;
   }
 
-  mysql_service_profiler_pfs->add("memory", "jemalloc", "report", report_type.c_str()); 
+  mysql_service_profiler_pfs->add("memory", "jemalloc", "report", "", report_type.c_str()); 
 
   strcpy(outp, buf.c_str());
   *length = strlen(outp);

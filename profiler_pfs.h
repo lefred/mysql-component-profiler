@@ -15,6 +15,7 @@ struct Profiler_record {
   std::string profiler_filename;
   std::string profiler_allocator;
   std::string profiler_action;
+  std::string profiler_extra;
 };
 
 class Profiler_POS {
@@ -51,13 +52,15 @@ extern void addProfiler_element(time_t profiler_timestamp,
                       std::string profiler_filename,
                       std::string profiler_type,
                       std::string profiler_allocator,
-                      std::string profiler_action
+                      std::string profiler_action,
+                      std::string profiler_extra
                       );
 
 extern void updateProfiler_element(std::string profiler_filename,
                       std::string profiler_type,
                       std::string profiler_allocator,
-                      std::string profiler_action
+                      std::string profiler_action,
+                      std::string profiler_extra
                       );
 
 int profiler_prepare_insert_row();

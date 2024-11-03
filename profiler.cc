@@ -292,10 +292,11 @@ DEFINE_BOOL_METHOD(get, (const char *szName, char *szOutValue, size_t *inoutSize
 }
 
 DEFINE_BOOL_METHOD(add, (const char* profiler_type, const char* profiler_allocator, 
-                                const char* profiler_action, const char* profiler_filename)) {
+                                const char* profiler_action, const char* profiler_filename,
+                                const char* profiler_extra)) {
 
   addProfiler_element(time(nullptr), profiler_filename, profiler_type,
-                          profiler_allocator, profiler_action);
+                          profiler_allocator, profiler_action, profiler_extra);
   return false;
 }
 

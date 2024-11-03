@@ -216,7 +216,7 @@ const char *memprof_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
   HeapProfilerStart(memprof_dump_path.c_str());
 
   strcpy(memprof_status, "RUNNING");
-  mysql_service_profiler_pfs->add("memory", "tcmalloc", "started", "");
+  mysql_service_profiler_pfs->add("memory", "tcmalloc", "started", "", "");
 
   strcpy(outp, "memory profiling started");
   *length = strlen(outp);
@@ -282,7 +282,7 @@ const char *memprof_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
 
   strcpy(memprof_status, "STOPPED");
 
-  mysql_service_profiler_pfs->add("memory", "tcmalloc", "stopped", "");
+  mysql_service_profiler_pfs->add("memory", "tcmalloc", "stopped", "", "");
 
   strcpy(outp, "memory profiling stopped");
   *length = strlen(outp);
@@ -356,7 +356,7 @@ const char *memprof_dump_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
         std::ostringstream filename;
         filename << memprof_dump_path << "."  << std::setw(4) << std::setfill('0') << dump_count << ".heap";
         std::string filePath = filename.str();
-        mysql_service_profiler_pfs->add("memory", "tcmalloc", "dumped", filePath.c_str()); 
+        mysql_service_profiler_pfs->add("memory", "tcmalloc", "dumped", filePath.c_str(), buf); 
         ++dump_count;
   } else {
   	strcpy(memprof_status, "STOPPED");
@@ -483,7 +483,7 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
       *is_null = 1;
       return nullptr;
   }
-  mysql_service_profiler_pfs->add("memory", "tcmalloc", "report", report_type.c_str()); 
+  mysql_service_profiler_pfs->add("memory", "tcmalloc", "report", "",report_type.c_str()); 
 
   strcpy(outp, buf.c_str());
   *length = strlen(outp);
