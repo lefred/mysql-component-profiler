@@ -258,6 +258,15 @@ const char *cpuprof_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     *is_null = 1;
     return 0;
   }
+  
+  if (strcmp(cpuprof_status, "STOPPED") == 0) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "cpu profiler is not running.");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }  
 
   ProfilerStop();
 
