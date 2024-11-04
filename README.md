@@ -693,3 +693,26 @@ if not it won't work and you will get the following error:
 ERROR: 1126 (HY000): Can't open shared library '/home/fred/workspace/mysql-server/BIN-DEBUG/lib/plugin/component_profiler_jemalloc_memory.so'`
 (errno: 0 /home/fred/workspace/mysql-server/BIN-DEBUG/lib/plugin/component_profiler_jemalloc_memory.so: undefined symbol: mallctl)
 ```
+
+### my.cnf or SET PERSIST problem 
+
+It seems that the system variables defined in `my.cnf` or saved using `SET PERSIST` are not used when
+restarting MySQL.
+
+This is because the user `bootstrap@localhost` doesn't have the `SENSITIVE_VARIABLES_OBSERVER` privilege:
+
+```
+2024-11-04T21:43:50.176044Z 6 [ERROR] [MY-011071] [Server] Component profiler_jemalloc_memory reported: 'user (bootstrap@localhost) has no access to set profiler.jeprof_path variable (privilege SENSITIVE_VARIABLES_OBSERVER required).'
+2024-11-04T21:43:50.176070Z 6 [ERROR] [MY-011268] [Server] Configuring persisted options failed: "Access denied; you need (at least one of) the SENSITIVE_VARIABLES_OBSERVER privilege(s) for this operation".
+```
+
+However, that user doesn't exist on the system?!? (I need to investigate with the development team).
+
+To fix it, just create the user and assign the privilege:
+
+```
+MySQL > CREATE USER bootstrap@localhost IDENTIFIED by RANDOM PASSWORD;
+MySQL > CREATE USER bootstrap@127.0.0.1 IDENTIFIED by RANDOM PASSWORD;
+
+MySQL > GRANT SENSITIVE_VARIABLES_OBSERVER ON *.* TO 'bootstrap'@'127.0.0.1';
+```
