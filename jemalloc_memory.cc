@@ -575,13 +575,6 @@ static mysql_service_status_t profiler_jemalloc_memory_service_init() {
   log_bi = mysql_service_log_builtins;
   log_bs = mysql_service_log_builtins_string;
 
-  //Todo check is thre is a value already if not set the default
-
-  STR_CHECK_ARG(str1) jeprof_path_arg;
-  jeprof_path_arg.def_val = const_cast<char*>(DEFAULT_JEPROF_PATH);
-  jeprof_path_value = nullptr;
-
-
   LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, "initializing…");
 
   list = new udf_list();
@@ -628,6 +621,10 @@ static mysql_service_status_t profiler_jemalloc_memory_service_init() {
 
   register_status_variables();
 
+  STR_CHECK_ARG(str1) jeprof_path_arg;
+  jeprof_path_arg.def_val = const_cast<char*>(DEFAULT_JEPROF_PATH);
+  jeprof_path_value = nullptr;
+
   if (mysql_service_component_sys_variable_register->register_variable(
           "profiler", "jeprof_binary",
           PLUGIN_VAR_STR | PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_MEMALLOC,
@@ -640,7 +637,7 @@ static mysql_service_status_t profiler_jemalloc_memory_service_init() {
   } else {
     LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
                     "new variable 'profiler.jeprof_binary' has been registered successfully.");
-  }
+  } 
 
   return result;
 }
