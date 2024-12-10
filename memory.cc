@@ -24,6 +24,9 @@
 #define SIGNATURE_CHANGE 1
 
 #include "memory.h"
+#include <thread>
+#include <chrono>
+
 
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins);
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins_string);
@@ -100,6 +103,19 @@ class udf_list {
   udf_list_t set;
 } *list;
 
+void startHeapProfilerWithTimeout(const std::string& dumpPath, int timeoutSeconds) {
+    // Start the heap profiler
+    HeapProfilerStart(dumpPath.c_str());
+
+    // Launch a separate thread to stop the profiler after the timeout
+    std::thread([timeoutSeconds]() {
+        std::this_thread::sleep_for(std::chrono::seconds(timeoutSeconds));
+        HeapProfilerDump("timeout");
+        HeapProfilerStop();
+        mysql_service_profiler_pfs->add("memory", "tcmalloc", "stopped", "", "");
+        strcpy(memprof_status, "STOPPED");
+    }).detach(); // Detach the thread to allow it to run independently
+}
 
 int register_status_variables() {
   if (mysql_service_status_variable_registration->register_variable(
@@ -138,10 +154,10 @@ const char *udf_init = "udf_init", *my_udf = "my_udf",
 // UDF to start the memory profiling
 
 static bool memprof_start_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
-  if (args->arg_count > 0) {
+  if (args->arg_count > 1) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function doesn't require any parameter");
+                                    "this function requires none of 1 parameter only");
     return true;
   }
   const char* name = "utf8mb4";
@@ -161,7 +177,7 @@ static void memprof_start_udf_deinit(__attribute__((unused))
   assert(initid->ptr == udf_init || initid->ptr == my_udf);
 }
 
-const char *memprof_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
+const char *memprof_start_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
                                 unsigned long *length, char *is_null,
                                 char *error) {
   *error = 0;
@@ -179,7 +195,20 @@ const char *memprof_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     *is_null = 1;
     return 0;
   }
-
+  int time = 0;
+  if (args->arg_count > 0) {
+    LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, args->args[0]);
+    if (args->arg_type[0] == INT_RESULT) {
+        time = *((int *)args->args[0]);
+    } else {
+      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "this function requires an integer as parameter");
+      *error = 1;
+      *is_null = 1;
+      return 0;
+    }
+  }
   char variable_value[1024];
   char *p_variable_value;
   size_t value_length = sizeof(variable_value) - 1;
@@ -213,12 +242,16 @@ const char *memprof_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     *is_null = 1;
     return 0;
   }
-  HeapProfilerStart(memprof_dump_path.c_str());
-
+  if (time > 0) {
+    startHeapProfilerWithTimeout(memprof_dump_path.c_str(), time);
+    snprintf(outp, 100, "memory profiling started for %d seconds", time);
+  } else {
+    HeapProfilerStart(memprof_dump_path.c_str());
+    strcpy(outp, "memory profiling started");
+  }
   strcpy(memprof_status, "RUNNING");
   mysql_service_profiler_pfs->add("memory", "tcmalloc", "started", "", "");
 
-  strcpy(outp, "memory profiling started");
   *length = strlen(outp);
 
   return const_cast<char *>(outp);
