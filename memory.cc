@@ -541,6 +541,121 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   return const_cast<char *>(outp);
 }
 
+static bool pprof_mem_diff_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
+  if (args->arg_count != 2) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "this function requires 2 arguments <dump_file1>, <dump_file2>");
+    return true;
+  }
+
+  const char* name = "utf8mb4";
+  char *value = const_cast<char*>(name);
+  initid->ptr = const_cast<char *>(udf_init);
+  if (mysql_service_mysql_udf_metadata->result_set(
+          initid, "charset",
+          const_cast<char *>(value))) {
+    LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "failed to set result charset");
+    return false;
+  }
+  return false;
+}
+
+static void pprof_mem_diff_udf_deinit(__attribute__((unused))
+                                       UDF_INIT *initid) {
+  assert(initid->ptr == udf_init || initid->ptr == my_udf);
+}
+
+const char *pprof_mem_diff_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
+                                unsigned long *length, char *is_null,
+                                char *error) {
+  *error = 0;
+  *is_null = 0;
+
+  MYSQL_THD thd;
+
+  mysql_service_mysql_current_thread_reader->get(&thd);
+  if (!have_required_privilege(thd))
+  {
+    mysql_error_service_printf(
+        ER_SPECIFIC_ACCESS_DENIED_ERROR, 0,
+        PRIVILEGE_NAME);
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
+  
+  std::string dump_file1 = args->args[0];
+  std::string dump_file2 = args->args[1];
+  if (!std::filesystem::exists(dump_file1)) {
+      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                           ER_UDF_ERROR, 0, "profiler",
+                          "The first dump file does not exist.");
+      *error = 1;
+      *is_null = 1;
+      return 0;
+  }
+  if (!std::filesystem::exists(dump_file2)) {
+      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                           ER_UDF_ERROR, 0, "profiler",
+                          "The second dump file does not exist.");
+      *error = 1;
+      *is_null = 1;
+      return 0;
+  }
+
+  if (IsHeapProfilerRunning()) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "memory profiler is still running, you need to stop it first.");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
+
+  std::string mysqld_binary;
+  if (get_mysqld(&mysqld_binary)) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "could not find the mysqld binary.");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
+
+  char variable_value[1024];
+  char *p_variable_value;
+  size_t value_length = sizeof(variable_value) - 1;
+
+  p_variable_value = &variable_value[0];
+
+  if (mysql_service_profiler_var->get("pprof_binary", p_variable_value, &value_length)) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "Impossible to get the value of the global variable profiler.pprof_binary");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
+
+
+  std::string buf; 
+  buf = exec_pprof((std::string(p_variable_value) + " --text --base="
+                 + dump_file1 + " " + mysqld_binary + " " + dump_file2).c_str());
+
+  outp = (char *)malloc(buf.length() + 1); 
+  if (outp == nullptr) {
+      *error = 1;
+      *is_null = 1;
+      return nullptr;
+  }
+  mysql_service_profiler_pfs->add("memory", "tcmalloc", "diff", "", ""); 
+
+  strcpy(outp, buf.c_str());
+  *length = strlen(outp);
+
+  return const_cast<char *>(outp);
+}
 
 
 } /* namespace udf_impl */
@@ -597,7 +712,17 @@ static mysql_service_status_t profiler_memory_service_init() {
   }
   LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
                     "new UDF 'memprof_report()' has been registered successfully.");
-
+ 
+  if (list->add_scalar("MEMPROF_DIFF", Item_result::STRING_RESULT,
+                       (Udf_func_any)udf_impl::pprof_mem_diff_udf,
+                       udf_impl::pprof_mem_diff_udf_init,
+                       udf_impl::pprof_mem_diff_udf_deinit)) {
+    delete list;
+    return 1; /* failure: one of the UDF registrations failed */
+  }
+  LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                    "new UDF 'memprof_diff()' has been registered successfully.");
+   
   register_status_variables();
 
   return result;
