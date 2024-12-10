@@ -318,6 +318,19 @@ MySQL > show status like 'profiler.memory_status';
 1 row in set (0.0071 sec)
 ```
 
+It's also possible to provide a timeout in seconds to stop the profiling automatically:
+
+```
+MySQL > select memprof_start(60);
++-----------------------------------------+
+| memprof_start(60)                       |
++-----------------------------------------+
+| memory profiling started for 60 seconds |
++--------------------------
+1 row in set (0.0022 sec) 
+```
+
+
 ### dump
 
 Differently than for the CPU profiling, we have the possibility to dump the collected data for the memory
