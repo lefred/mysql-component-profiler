@@ -26,6 +26,7 @@
 #include "memory.h"
 #include <thread>
 #include <chrono>
+#include <filesystem>
 
 
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins);
@@ -197,7 +198,6 @@ const char *memprof_start_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   }
   int time = 0;
   if (args->arg_count > 0) {
-    LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, args->args[0]);
     if (args->arg_type[0] == INT_RESULT) {
         time = *((int *)args->args[0]);
     } else {
@@ -409,10 +409,10 @@ const char *memprof_dump_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
 // UDF to run pprof for memory 
 
 static bool pprof_mem_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
-  if (args->arg_count > 1) {
+  if (args->arg_count > 2) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function requires none or 1 parameter: 'text' or 'dot'");
+                                    "this function requires none, 1 or 2 parameters: <'text' or 'dot'>, <dump_file>");
     return true;
   }
 
@@ -451,24 +451,40 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
     *is_null = 1;
     return 0;
   }
-
+  
+  std::string report_file;
   std::string report_type;
+  report_file =  memprof_dump_path + "*.heap";
   if (args->arg_count < 1) {
-          report_type = "text";
+      report_type = "text";
   } else {
-          report_type = args->args[0];
-          if (strcasecmp(report_type.c_str(), "TEXT") == 0) {
-                  report_type = "text";
-          } else if (strcasecmp(report_type.c_str(), "DOT") == 0) {
-                  report_type = "dot";
-          } else {
-		mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
-                                    ER_UDF_ERROR, 0, "profiler",
-                                    "wrong parameter it must be 'TEXT' or 'DOT'.");
-    		*error = 1;
-    		*is_null = 1;
-    		return 0;
+      if (args->arg_count > 1) {
+          std::string report_file_arg = args->args[1];
+          std::filesystem::path p(memprof_dump_path);
+          std::filesystem::path dir = p.parent_path();
+          report_file = dir.string() + "/" + report_file_arg;
+          if (!std::filesystem::exists(report_file)) {
+              mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                              ER_UDF_ERROR, 0, "profiler",
+                              "The dump file does not exist.");
+              *error = 1;
+              *is_null = 1;
+              return 0;
           }
+      } 
+      report_type = args->args[0];
+      if (strcasecmp(report_type.c_str(), "TEXT") == 0) {
+          report_type = "text";
+      } else if (strcasecmp(report_type.c_str(), "DOT") == 0) {
+          report_type = "dot";
+      } else {
+		      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                              ER_UDF_ERROR, 0, "profiler",
+                              "wrong parameter it must be 'TEXT' or 'DOT'.");
+    		  *error = 1;
+    		  *is_null = 1;
+    		  return 0;
+      }
   }
 
 
@@ -506,9 +522,10 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
     return 0;
   }
 
+
   std::string buf; 
   buf = exec_pprof((std::string(p_variable_value) + " --" +  report_type + " "
-                 + mysqld_binary + " " + memprof_dump_path + "*.heap").c_str());
+                 + mysqld_binary + " " + report_file).c_str());
 
   outp = (char *)malloc(buf.length() + 1); 
   if (outp == nullptr) {

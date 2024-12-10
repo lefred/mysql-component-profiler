@@ -326,7 +326,7 @@ MySQL > select memprof_start(60);
 | memprof_start(60)                       |
 +-----------------------------------------+
 | memory profiling started for 60 seconds |
-+--------------------------
++-----------------------------------------+
 1 row in set (0.0022 sec) 
 ```
 
@@ -441,6 +441,33 @@ We can use the file to generate an image:
 $ dot -Tpng memory.dot -o memory.png
 ```
 ![Memory](examples/memory.png)
+
+
+If you don't pass any dump file, all the dump files are used to generate the report. If you want to use a specific file, you can pass the filename as argument:
+
+```
+MySQL > select memprof_report('TEXT', 'mysql.memprof.0001.heap')\G
+*************************** 1. row ***************************
+memprof_report('TEXT', 'mysql.memprof.0001.heap'): Total: 0.0 MB
+     0.0  58.4%  58.4%      0.0  58.4% void* my_internal_malloc [clone .lto_priv.0] (inline)
+     0.0  35.6%  94.1%      0.0  35.6% ut::detail::malloc (inline)
+     0.0   4.2%  98.3%      0.0  36.9% ut::detail::Alloc_pfs::alloc (inline)
+     0.0   0.9%  99.2%      0.0   0.9% dd::cache::Element_map::Element_map (inline)
+     0.0   0.4%  99.6%      0.0   0.4% addProfiler_element (inline)
+     0.0   0.2%  99.8%      0.0   0.2% ngs::Socket_events::callback_timeout (inline)
+     0.0   0.1% 100.0%      0.0   0.1% std::pair::pair (inline)
+     0.0   0.0% 100.0%      0.0   0.0% udf_impl::memprof_start_udf (inline)
+     0.0   0.0% 100.0%      0.0   1.0% Detached_thread::operator (inline)
+     0.0   0.0% 100.0%      0.0  11.5% Field_long::clone
+     0.0   0.0% 100.0%      0.0   0.4% Item::send
+     0.0   0.0% 100.0%      0.0   0.4% Item_func_udf_str::val_str
+     0.0   0.0% 100.0%      0.0   3.4% Log_files_dict::add
+     0.0   0.0% 100.0%      0.0   3.4% Log_files_dict::add (inline)
+     0.0   0.0% 100.0%      0.0  24.5% MEM_ROOT::Alloc (inline)
+     0.0   0.0% 100.0%      0.0  41.6% MEM_ROOT::AllocBlock
+     0.0   0.0% 100.0%      0.0  41.6% MEM_ROOT::AllocSlow
+     ....
+```
 
 ## Memory profiling - jemalloc
 
