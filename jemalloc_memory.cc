@@ -346,6 +346,7 @@ const char *memprof_jemalloc_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     return 0;
   }
 
+
   bool active = false;
   if (mallctl("prof.active", nullptr, nullptr, &active, sizeof(active)) != 0) 
   {
@@ -493,10 +494,23 @@ const char *jeprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   }
 
   std::string report_type;
-  if (args->arg_count < 1) {
+  int limit = 0;
+  if (args->arg_count > 0) {
+    if (args->arg_type[0] == INT_RESULT) {
+      limit = *((int *)args->args[0]);
+    } else {
+      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "this function requires an integer as first parameter");
+      *error = 1;
+      *is_null = 1;
+      return 0;
+    }
+  }  
+  if (args->arg_count < 2) {
           report_type = "text";
   } else {
-          report_type = args->args[0];
+          report_type = args->args[1];
           if (strcasecmp(report_type.c_str(), "TEXT") == 0) {
                   report_type = "text";
           } else if (strcasecmp(report_type.c_str(), "DOT") == 0) {
@@ -549,6 +563,10 @@ const char *jeprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   std::string buf; 
   buf = exec_pprof((std::string(p_variable_value) + " --" +  report_type + " "
                  + mysqld_binary + " " + memprof_jemalloc_dump_path + "*.heap").c_str());
+
+  if (limit > 0 && report_type == "text") {
+    buf = limit_lines(buf, limit);
+  }
 
   outp = (char *)malloc(buf.length() + 1); 
   if (outp == nullptr) {
