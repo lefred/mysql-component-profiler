@@ -283,10 +283,10 @@ const char *cpuprof_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
 // UDF to run pprof for cpu
 
 static bool pprof_cpu_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
-  if (args->arg_count > 1) {
+  if (args->arg_count > 2) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function requires none or 1 parameter: 'text' or 'dot'");
+                                    "this function requires none , 1 or 2 parameters: <limit>, <'text' or 'dot'>");
     return true;
   }
 
@@ -327,10 +327,23 @@ const char *pprof_cpu_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   }
 
   std::string report_type;
-  if (args->arg_count < 1) {
+  int limit = 0;  
+  if (args->arg_count > 0) {
+    if (args->arg_type[0] == INT_RESULT) {
+      limit = *((int *)args->args[0]);
+    } else {
+      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "this function requires an integer as first parameter");
+      *error = 1;
+      *is_null = 1;
+      return 0;
+    }
+  }
+  if (args->arg_count < 2) {
           report_type = "text";
   } else {
-          report_type = args->args[0];
+          report_type = args->args[1];
           if (strcasecmp(report_type.c_str(), "TEXT") == 0) {
                   report_type = "text";
           } else if (strcasecmp(report_type.c_str(), "DOT") == 0) {
@@ -382,7 +395,11 @@ const char *pprof_cpu_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   std::string buf;
   buf = exec_pprof((std::string(p_variable_value) + " --" +  report_type + " "
                  + mysqld_binary + " " + cpuprof_dump_path + ".prof").c_str());
-
+  
+  if (limit > 0 && report_type == "text") {
+    buf = limit_lines(buf, limit);
+  }
+  
   outp = (char *)malloc(buf.length() + 1);
   if (outp == nullptr) {
       *error = 1;
