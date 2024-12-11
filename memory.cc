@@ -412,7 +412,7 @@ static bool pprof_mem_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
   if (args->arg_count > 2) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function requires none, 1 or 2 parameters: <'text' or 'dot'>, <dump_file>");
+                                    "this function requires none, 1, 2 or 3 parameters: <limit>, <'text' or 'dot'>, <dump_file> limit is 0 by default, and don't limit the output. Limit is only used for 'text'");
     return true;
   }
 
@@ -451,14 +451,27 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
     *is_null = 1;
     return 0;
   }
-  
+
+  int limit = 0;  
   std::string report_file;
   std::string report_type;
   report_file =  memprof_dump_path + "*.heap";
-  if (args->arg_count < 1) {
+  if (args->arg_count > 0) {
+    if (args->arg_type[0] == INT_RESULT) {
+      limit = *((int *)args->args[0]);
+    } else {
+      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "this function requires an integer as first parameter");
+      *error = 1;
+      *is_null = 1;
+      return 0;
+    }
+  }
+  if (args->arg_count < 2) {
       report_type = "text";
   } else {
-      if (args->arg_count > 1) {
+      if (args->arg_count > 2) {
           std::string report_file_arg = args->args[1];
           std::filesystem::path p(memprof_dump_path);
           std::filesystem::path dir = p.parent_path();
@@ -527,6 +540,10 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   buf = exec_pprof((std::string(p_variable_value) + " --" +  report_type + " "
                  + mysqld_binary + " " + report_file).c_str());
 
+  if (limit > 0 && report_type == "text") {
+    buf = limit_lines(buf, limit);
+  }
+
   outp = (char *)malloc(buf.length() + 1); 
   if (outp == nullptr) {
       *error = 1;
@@ -545,7 +562,7 @@ static bool pprof_mem_diff_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
   if (args->arg_count != 2) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function requires 2 arguments <dump_file1>, <dump_file2>");
+                                    "this function requires 2 or 3 arguments <dump_file1>, <dump_file2>, <limit>"); 
     return true;
   }
 
@@ -587,6 +604,19 @@ const char *pprof_mem_diff_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   
   std::string dump_file1 = args->args[0];
   std::string dump_file2 = args->args[1];
+  int limit = 0;
+  if (args->arg_count > 2) {
+    if (args->arg_type[2] == INT_RESULT) {
+      limit = *((int *)args->args[2]);
+    } else {
+      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "this function requires an integer as third parameter");
+      *error = 1;
+      *is_null = 1;
+      return 0;
+    }
+  }
   if (!std::filesystem::exists(dump_file1)) {
       mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                            ER_UDF_ERROR, 0, "profiler",
@@ -642,6 +672,10 @@ const char *pprof_mem_diff_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   std::string buf; 
   buf = exec_pprof((std::string(p_variable_value) + " --text --base="
                  + dump_file1 + " " + mysqld_binary + " " + dump_file2).c_str());
+
+  if (limit > 0) {
+    buf = limit_lines(buf, limit);
+  }
 
   outp = (char *)malloc(buf.length() + 1); 
   if (outp == nullptr) {

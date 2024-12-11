@@ -142,3 +142,18 @@ bool get_mysqld(std::string* output) {
     *output = mysql_binary;
     return 0; 
 }
+
+// Function to limit the string to X lines
+std::string limit_lines(const std::string& input, size_t max_lines) {
+    std::istringstream stream(input);
+    std::ostringstream limited_stream;
+    std::string line;
+    size_t count = 0;
+
+    while (count < max_lines && std::getline(stream, line)) {
+        limited_stream << line << '\n';
+        count++;
+    }
+
+    return limited_stream.str();
+}

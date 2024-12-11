@@ -77,3 +77,4 @@ extern bool parentDirectoryExists(const std::string& filePath);
 extern std::string exec_pprof(const char* cmd);
 extern bool get_profiler_variable(const char* variable_name, std::string* output);
 extern bool get_mysqld(std::string* output); 
+extern std::string limit_lines(const std::string& input, size_t max_lines);
