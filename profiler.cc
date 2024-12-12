@@ -250,7 +250,8 @@ const char *profiler_cleanup_udf(UDF_INIT *, UDF_ARGS *, char *outp,
   *is_null = 0;
   std::filesystem::path p(memprof_dump_path_value);
   if(remove_files_with_prefix(p.parent_path().string(), p.filename().string())) {
-    strcpy(outp, "Profiling data has been cleaned up.");
+    strcpy(outp, "Profiling data matching has been cleaned up.");
+    snprintf(outp, 500, "Profiling data matching %s prefix has been cleaned up.", memprof_dump_path_value);
   } else {
     strcpy(outp, "Error while cleaning up profiling data.");
   }
