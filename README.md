@@ -47,39 +47,43 @@ MySQL > select * from mysql.component;
 During the installation of the components, the following lines will be added in the error log:
 
 ```
-2024-10-16T16:24:39.404023Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'initializing…'
-2024-10-16T16:24:39.404131Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.dump_path' has been registered successfully.'
-2024-10-16T16:24:39.404200Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.pprof_binary' has been registered successfully.'
-2024-10-16T16:24:39.667589Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'PFS table has been registered successfully.'
-2024-10-16T16:24:41.536139Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'initializing…'
-2024-10-16T16:24:41.536184Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_start()' has been registered successfully.'
-2024-10-16T16:24:41.536202Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_stop()' has been registered successfully.'
-2024-10-16T16:24:41.536220Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_report()' has been registered successfully.'
-2024-10-16T16:24:41.536271Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'Status variable(s) registered'
-2024-10-16T16:32:15.037022Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'initializing…'
-2024-10-16T16:32:15.037071Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_start()' has been registered successfully.'
-2024-10-16T16:32:15.037095Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_stop()' has been registered successfully.'
-2024-10-16T16:32:15.037114Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_dump()' has been registered successfully.'
-2024-10-16T16:32:15.037133Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_report()' has been registered successfully.'
-2024-10-16T16:32:15.037203Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'Status variable(s) registered
+2024-12-12T17:47:19.949654Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'initializing…'
+2024-12-12T17:47:19.949691Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new UDF 'profiler_cleanup()' has been registered successfully.'
+2024-12-12T17:47:19.949775Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.dump_path' has been registered successfully.'
+2024-12-12T17:47:19.949832Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'new variable 'profiler.pprof_binary' has been registered successfully.'
+2024-12-12T17:47:19.952361Z 8 [Note] [MY-011071] [Server] Component profiler reported: 'PFS table has been registered successfully.'
+2024-12-12T17:55:29.929491Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'initializing…'
+2024-12-12T17:55:29.929533Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_start()' has been registered successfully.'
+2024-12-12T17:55:29.929549Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_stop()' has been registered successfully.'
+2024-12-12T17:55:29.929560Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_dump()' has been registered successfully.'
+2024-12-12T17:55:29.929571Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_report()' has been registered successfully.'
+2024-12-12T17:55:29.929581Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'new UDF 'memprof_diff()' has been registered successfully.'
+2024-12-12T17:55:29.929625Z 8 [Note] [MY-011071] [Server] Component profiler_memory reported: 'Status variable(s) registered'
+2024-12-12T17:55:34.998066Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'initializing…'
+2024-12-12T17:55:34.998130Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_start()' has been registered successfully.'
+2024-12-12T17:55:34.998151Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_stop()' has been registered successfully.'
+2024-12-12T17:55:34.998164Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'new UDF 'cpuprof_report()' has been registered successfully.'
+2024-12-12T17:55:34.998228Z 8 [Note] [MY-011071] [Server] Component profiler_cpu reported: 'Status variable(s) registered'
 ```
 
 As we can see several UDFs were created:
 
 ```
 MySQL > SELECT UDF_NAME FROM performance_schema.user_defined_functions where udf_name like '%PROF_%';
-+----------------+
-| UDF_NAME       |
-+----------------+
-| MEMPROF_REPORT |
-| MEMPROF_DUMP   |
-| CPUPROF_STOP   |
-| MEMPROF_STOP   |
-| CPUPROF_START  |
-| MEMPROF_START  |
-| CPUPROF_REPORT |
-+----------------+
-7 rows in set (0.0007 sec)
++------------------+
+| UDF_NAME         |
++------------------+
+| CPUPROF_REPORT   |
+| CPUPROF_STOP     |
+| MEMPROF_DIFF     |
+| MEMPROF_START    |
+| PROFILER_CLEANUP |
+| MEMPROF_DUMP     |
+| MEMPROF_REPORT   |
+| MEMPROF_STOP     |
+| CPUPROF_START    |
++------------------+
+9 rows in set (0.0018 sec)
 ```
 
 ### when using jemalloc
@@ -641,6 +645,31 @@ MySQL > select * from performance_schema.profiler_actions;
 | 2024-11-03 16:02:48 | jemalloc  | memory | report  |                              | dot   |
 +---------------------+-----------+--------+---------+------------------------------+-------+
 5 rows in set (0.0030 sec)
+```
+
+## cleanup collected dump files
+
+It's possible to also cleanup the collected dump files. This could be dangerous as
+it could be used to try deleting other important files.
+
+The UDF `profiler_cleanup` cleans up all the files in the directory and matching the filenmae specified in the `profiler.dump_path` variable:
+
+```
+MySQL > show global variables like 'profiler.dump_path';
++--------------------+--------------------+
+| Variable_name      | Value              |
++--------------------+--------------------+
+| profiler.dump_path | /tmp/mysql.memprof |
++--------------------+--------------------+
+1 row in set (0.0007 sec)
+
+MySQL > select profiler_cleanup();
++------------------------------------------------------------------------+
+| profiler_cleanup()                                                     |
++------------------------------------------------------------------------+
+| Profiling data matching /tmp/mysql.memprof prefix has been cleaned up. |
++------------------------------------------------------------------------+
+1 row in set (0.0008 sec)
 ```
 
 ## errors, warnings, messages
