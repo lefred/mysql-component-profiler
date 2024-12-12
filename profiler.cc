@@ -34,6 +34,8 @@ REQUIRES_SERVICE_PLACEHOLDER(mysql_current_thread_reader);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_security_context_options);
 REQUIRES_SERVICE_PLACEHOLDER(global_grants_check);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_runtime_error);
+REQUIRES_SERVICE_PLACEHOLDER(udf_registration);
+REQUIRES_SERVICE_PLACEHOLDER(mysql_udf_metadata);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_register);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
 #if MYSQL_VERSION_ID >= 90000
@@ -58,6 +60,64 @@ static char *memprof_dump_path_value;
 // Buffer for the value of the memprof.pprof_path global variable
 static char *pprof_path_value;
 
+class udf_list {
+  typedef std::list<std::string> udf_list_t;
+
+ public:
+  ~udf_list() { unregister(); }
+  bool add_scalar(const char *func_name, enum Item_result return_type,
+                  Udf_func_any func, Udf_func_init init_func = NULL,
+                  Udf_func_deinit deinit_func = NULL) {
+    if (!mysql_service_udf_registration->udf_register(
+            func_name, return_type, func, init_func, deinit_func)) {
+      set.push_back(func_name);
+      return false;
+    }
+    return true;
+  }
+
+  bool unregister() {
+    udf_list_t delete_set;
+    /* try to unregister all of the udfs */
+    for (auto udf : set) {
+      int was_present = 0;
+      if (!mysql_service_udf_registration->udf_unregister(udf.c_str(),
+                                                          &was_present) ||
+          !was_present)
+        delete_set.push_back(udf);
+    }
+
+    /* remove the unregistered ones from the list */
+    for (auto udf : delete_set) set.remove(udf);
+
+    /* success: empty set */
+    if (set.empty()) return false;
+
+    /* failure: entries still in the set */
+    return true;
+  }
+
+ private:
+  udf_list_t set;
+} *list;
+
+bool remove_files_with_prefix(const std::string& directory, const std::string& prefix) {
+    namespace fs = std::filesystem;
+
+    try {
+        for (const auto& entry : fs::directory_iterator(directory)) {
+            if (entry.is_regular_file() && entry.path().filename().string().find(prefix) == 0) {
+                fs::remove(entry.path());
+            }
+        }
+    } catch (const fs::filesystem_error& e) {
+        mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "Error while deleting files.");
+        return false; 
+    }
+    return true;
+}
 
 static int memprof_dump_path_check(MYSQL_THD thd,
                                        SYS_VAR *self MY_ATTRIBUTE((unused)),
@@ -159,6 +219,48 @@ static void pprof_path_update(MYSQL_THD, SYS_VAR *, void *var_ptr,
       *(static_cast<const char **>(const_cast<void *>(save)));
 }
 
+namespace udf_impl {
+
+const char *udf_init = "udf_init", *my_udf = "my_udf",
+           *my_udf_clear = "my_clear", *my_udf_add = "my_udf_add";
+
+static bool profiler_cleanup_udf_init(UDF_INIT *initid, UDF_ARGS *, char *) {
+  const char* name = "utf8mb4";
+  char *value = const_cast<char*>(name);
+  initid->ptr = const_cast<char *>(udf_init);
+  if (mysql_service_mysql_udf_metadata->result_set(
+          initid, "charset",
+          const_cast<char *>(value))) {
+    LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "failed to set result charset");
+    return false;
+  }
+  return false;
+}
+
+static void profiler_cleanup_udf_deinit(__attribute__((unused))
+                                       UDF_INIT *initid) {
+  assert(initid->ptr == udf_init || initid->ptr == my_udf);
+}
+
+const char *profiler_cleanup_udf(UDF_INIT *, UDF_ARGS *, char *outp,
+                                unsigned long *length, char *is_null,
+                                char *error) {
+  
+  *error = 0;
+  *is_null = 0;
+  std::filesystem::path p(memprof_dump_path_value);
+  if(remove_files_with_prefix(p.parent_path().string(), p.filename().string())) {
+    strcpy(outp, "Profiling data has been cleaned up.");
+  } else {
+    strcpy(outp, "Error while cleaning up profiling data.");
+  }
+
+  *length = strlen(outp);
+
+  return const_cast<char *>(outp);
+}
+
+} /* namespace udf_impl */
 
 static mysql_service_status_t profiler_service_init() {
   mysql_service_status_t result = 0;
@@ -177,6 +279,19 @@ static mysql_service_status_t profiler_service_init() {
   //Todo check is thre is a value already if not set the default
 
   LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, "initializing…");
+
+  list = new udf_list();
+
+  if (list->add_scalar("PROFILER_CLEANUP", Item_result::STRING_RESULT,
+                       (Udf_func_any)udf_impl::profiler_cleanup_udf,
+                       udf_impl::profiler_cleanup_udf_init,
+                       udf_impl::profiler_cleanup_udf_deinit)) {
+    delete list;
+    return 1; /* failure: one of the UDF registrations failed */
+  }
+  LogComponentErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                    "new UDF 'profiler_cleanup()' has been registered successfully.");
+
 
   // Registration of the global system variable
   if (mysql_service_component_sys_variable_register->register_variable(
@@ -229,6 +344,10 @@ static mysql_service_status_t profiler_service_deinit() {
   mysql_service_status_t result = 0;
 
   cleanup_profiler_data();
+
+  if (list->unregister()) return 1; /* failure: some UDFs still in use */
+
+  delete list;
 
   if (mysql_service_component_sys_variable_unregister->unregister_variable(
               "profiler", "dump_path")) {
@@ -323,6 +442,8 @@ BEGIN_COMPONENT_REQUIRES(profiler_service)
     REQUIRES_SERVICE(mysql_current_thread_reader),
     REQUIRES_SERVICE(mysql_runtime_error), 
     REQUIRES_SERVICE(pfs_plugin_table_v1),
+    REQUIRES_SERVICE(mysql_udf_metadata), 
+    REQUIRES_SERVICE(udf_registration),
     REQUIRES_SERVICE_AS(pfs_plugin_column_string_v2, pfs_string),
     REQUIRES_SERVICE_AS(pfs_plugin_column_timestamp_v2, pfs_timestamp),
 #if MYSQL_VERSION_ID >= 90000
