@@ -28,7 +28,6 @@
 #include <chrono>
 #include <filesystem>
 
-
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins);
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins_string);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_thd_security_context);
@@ -252,7 +251,13 @@ const char *memprof_start_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
     startHeapProfilerWithTimeout(memprof_dump_path.c_str(), time);
     snprintf(outp, 100, "memory profiling started for %d seconds", time);
   } else {
+    //setenv("HEAP_PROFILE_TIME_INTERVAL", "10", 1);
+
     HeapProfilerStart(memprof_dump_path.c_str());
+    setenv("HEAP_PROFILE_TIME_INTERVAL", "0", 1);
+    setenv("HEAP_PROFILE_ALLOCATION_INTERVAL", "0", 1);
+    setenv("HEAP_PROFILE_INUSE_INTERVAL", "0", 1);
+    setenv("HEAP_PROFILE_DEALLOCATION_INTERVAL", "0", 1);
     HeapProfilerDump("starting");
     std::ostringstream filename;
     filename << memprof_dump_path << "."  << std::setw(4) << std::setfill('0') << dump_count << ".heap";
