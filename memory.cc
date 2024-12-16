@@ -106,6 +106,10 @@ class udf_list {
 void startHeapProfilerWithTimeout(const std::string& dumpPath, int timeoutSeconds) {
     // Start the heap profiler
     HeapProfilerStart(dumpPath.c_str());
+    setenv("HEAP_PROFILE_TIME_INTERVAL", "0", 1);
+    setenv("HEAP_PROFILE_ALLOCATION_INTERVAL", "0", 1);
+    setenv("HEAP_PROFILE_INUSE_INTERVAL", "0", 1);
+    setenv("HEAP_PROFILE_DEALLOCATION_INTERVAL", "0", 1);
     HeapProfilerDump("starting");
     std::ostringstream filename;
     filename << memprof_dump_path << "."  << std::setw(4) << std::setfill('0') << dump_count << ".heap";
