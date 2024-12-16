@@ -107,6 +107,12 @@ class udf_list {
 void startHeapProfilerWithTimeout(const std::string& dumpPath, int timeoutSeconds) {
     // Start the heap profiler
     HeapProfilerStart(dumpPath.c_str());
+    HeapProfilerDump("starting");
+    std::ostringstream filename;
+    filename << memprof_dump_path << "."  << std::setw(4) << std::setfill('0') << dump_count << ".heap";
+    std::string filePath = filename.str();
+    mysql_service_profiler_pfs->add("memory", "tcmalloc", "dumped", filePath.c_str(), "starting"); 
+    ++dump_count;
 
     // Launch a separate thread to stop the profiler after the timeout
     std::thread([timeoutSeconds]() {
@@ -247,10 +253,16 @@ const char *memprof_start_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
     snprintf(outp, 100, "memory profiling started for %d seconds", time);
   } else {
     HeapProfilerStart(memprof_dump_path.c_str());
+    HeapProfilerDump("starting");
+    std::ostringstream filename;
+    filename << memprof_dump_path << "."  << std::setw(4) << std::setfill('0') << dump_count << ".heap";
+    filePath = filename.str();
     strcpy(outp, "memory profiling started");
   }
   strcpy(memprof_status, "RUNNING");
   mysql_service_profiler_pfs->add("memory", "tcmalloc", "started", "", "");
+  mysql_service_profiler_pfs->add("memory", "tcmalloc", "dumped", filePath.c_str(), "starting"); 
+  ++dump_count;
 
   *length = strlen(outp);
 
@@ -310,6 +322,12 @@ const char *memprof_stop_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     *is_null = 1;
     return 0;
   }
+
+  HeapProfilerDump("stopping");
+  std::ostringstream filename;
+  filename << memprof_dump_path << "."  << std::setw(4) << std::setfill('0') << dump_count << ".heap";
+  std::string  filePath = filename.str();
+  mysql_service_profiler_pfs->add("memory", "tcmalloc", "dumped", filePath.c_str(), "stopping"); 
 
   HeapProfilerStop();
 
@@ -409,10 +427,10 @@ const char *memprof_dump_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
 // UDF to run pprof for memory 
 
 static bool pprof_mem_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
-  if (args->arg_count > 2) {
+  if (args->arg_count <1 || args->arg_count > 2) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function requires none, 1, 2 or 3 parameters: <limit>, <'text' or 'dot'>, <dump_file> limit is 0 by default, and don't limit the output. Limit is only used for 'text'");
+                                    "this function requires 1, 2 or 3 parameters: <dump_file>, <limit>, <'text' or 'dot'> limit is 0 by default, and don't limit the output. Limit is only used for 'text'");
     return true;
   }
 
@@ -455,14 +473,25 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   int limit = 0;  
   std::string report_file;
   std::string report_type;
-  report_file =  memprof_dump_path + "*.heap";
-  if (args->arg_count > 0) {
-    if (args->arg_type[0] == INT_RESULT) {
-      limit = *((int *)args->args[0]);
+  std::string report_file_arg = args->args[0];
+  std::filesystem::path p(memprof_dump_path);
+  std::filesystem::path dir = p.parent_path();
+  report_file = dir.string() + "/" + report_file_arg;
+  if (!std::filesystem::exists(report_file)) {
+       mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                       ER_UDF_ERROR, 0, "profiler",
+                       "The dump file does not exist.");
+       *error = 1;
+       *is_null = 1;
+       return 0;
+  }
+  if (args->arg_count > 1) {
+    if (args->arg_type[1] == INT_RESULT) {
+      limit = *((int *)args->args[1]);
     } else {
       mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function requires an integer as first parameter");
+                                    "this function requires an integer as second parameter");
       *error = 1;
       *is_null = 1;
       return 0;
@@ -471,21 +500,7 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   if (args->arg_count < 2) {
       report_type = "text";
   } else {
-      if (args->arg_count > 2) {
-          std::string report_file_arg = args->args[1];
-          std::filesystem::path p(memprof_dump_path);
-          std::filesystem::path dir = p.parent_path();
-          report_file = dir.string() + "/" + report_file_arg;
-          if (!std::filesystem::exists(report_file)) {
-              mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
-                              ER_UDF_ERROR, 0, "profiler",
-                              "The dump file does not exist.");
-              *error = 1;
-              *is_null = 1;
-              return 0;
-          }
-      } 
-      report_type = args->args[0];
+      report_type = args->args[2];
       if (strcasecmp(report_type.c_str(), "TEXT") == 0) {
           report_type = "text";
       } else if (strcasecmp(report_type.c_str(), "DOT") == 0) {
