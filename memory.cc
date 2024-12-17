@@ -53,12 +53,27 @@ SERVICE_TYPE(log_builtins_string) * log_bs;
 static char memprof_status[] = "STOPPED";
 int dump_count = 1;
 
+static unsigned int heap_profile_time_interval = 0;
+static unsigned int heap_profile_allocation_interval = 0;
+static unsigned int heap_profile_inuse_interval = 0;
+static unsigned int heap_profile_deallocation_interval = 0;
+
+
 // Buffer for the value of the profiler.dump_path global variable
 std::string memprof_dump_path;
 
 static SHOW_VAR memprof_status_variables[] = {
   {"profiler.memory_status", (char *)&memprof_status, SHOW_CHAR,
-    SHOW_SCOPE_GLOBAL},{nullptr, nullptr, SHOW_UNDEF,
+    SHOW_SCOPE_GLOBAL},
+  {"profiler.heap_profile_time_interval", (char *)&heap_profile_time_interval, SHOW_INT,
+    SHOW_SCOPE_GLOBAL},
+  {"profiler.heap_profile_allocation_interval", (char *)&heap_profile_allocation_interval, SHOW_INT,
+    SHOW_SCOPE_GLOBAL},
+  {"profiler.heap_profile_inuse_interval", (char *)&heap_profile_inuse_interval, SHOW_INT,
+    SHOW_SCOPE_GLOBAL},
+  {"profiler.heap_profile_deallocation_interval", (char *)&heap_profile_deallocation_interval, SHOW_INT,
+    SHOW_SCOPE_GLOBAL},
+  {nullptr, nullptr, SHOW_UNDEF,
     SHOW_SCOPE_UNDEF}  // null terminator required
 };
 
@@ -103,13 +118,24 @@ class udf_list {
   udf_list_t set;
 } *list;
 
+std::filesystem::path get_last_file_with_prefix(const std::filesystem::path& directory, const std::string& prefix) {
+    namespace fs = std::filesystem;
+
+    fs::path last_file;
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (entry.is_regular_file() && entry.path().filename().string().find(prefix) == 0) {
+            if (last_file.empty() || entry.path().filename().string() > last_file.filename().string()) {
+                last_file = entry.path();
+            }
+        }
+    }
+
+    return last_file;
+}
+
 void startHeapProfilerWithTimeout(const std::string& dumpPath, int timeoutSeconds) {
     // Start the heap profiler
     HeapProfilerStart(dumpPath.c_str());
-    setenv("HEAP_PROFILE_TIME_INTERVAL", "0", 1);
-    setenv("HEAP_PROFILE_ALLOCATION_INTERVAL", "0", 1);
-    setenv("HEAP_PROFILE_INUSE_INTERVAL", "0", 1);
-    setenv("HEAP_PROFILE_DEALLOCATION_INTERVAL", "0", 1);
     HeapProfilerDump("starting");
     std::ostringstream filename;
     filename << memprof_dump_path << "."  << std::setw(4) << std::setfill('0') << dump_count << ".heap";
@@ -255,13 +281,8 @@ const char *memprof_start_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
     startHeapProfilerWithTimeout(memprof_dump_path.c_str(), time);
     snprintf(outp, 100, "memory profiling started for %d seconds", time);
   } else {
-    //setenv("HEAP_PROFILE_TIME_INTERVAL", "10", 1);
 
     HeapProfilerStart(memprof_dump_path.c_str());
-    setenv("HEAP_PROFILE_TIME_INTERVAL", "0", 1);
-    setenv("HEAP_PROFILE_ALLOCATION_INTERVAL", "0", 1);
-    setenv("HEAP_PROFILE_INUSE_INTERVAL", "0", 1);
-    setenv("HEAP_PROFILE_DEALLOCATION_INTERVAL", "0", 1);
     HeapProfilerDump("starting");
     std::ostringstream filename;
     filename << memprof_dump_path << "."  << std::setw(4) << std::setfill('0') << dump_count << ".heap";
@@ -436,10 +457,10 @@ const char *memprof_dump_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
 // UDF to run pprof for memory 
 
 static bool pprof_mem_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
-  if (args->arg_count <1 || args->arg_count > 2) {
+  if (args->arg_count > 2) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function requires 1, 2 or 3 parameters: <dump_file>, <limit>, <'text' or 'dot'> limit is 0 by default, and don't limit the output. Limit is only used for 'text'");
+                                    "this function requires none, 1, 2 or 3 parameters: <dump_file>, <limit>, <'text' or 'dot'> limit is 0 by default, and don't limit the output. Limit is only used for 'text'");
     return true;
   }
 
@@ -482,7 +503,23 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   int limit = 0;  
   std::string report_file;
   std::string report_type;
-  std::string report_file_arg = args->args[0];
+  std::string report_file_arg;
+  if (args->arg_count < 1) {
+    std::filesystem::path p(memprof_dump_path);
+    auto last_file = get_last_file_with_prefix(p.parent_path(), p.filename().string());
+    if (!last_file.empty()) { 
+      report_file_arg = last_file.filename().string();
+    } else {
+      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                      ER_UDF_ERROR, 0, "profiler",
+                                      "The dump file does not exist.");
+      *error = 1;
+      *is_null = 1;
+      return 0;
+    }
+  } else {
+    report_file_arg = args->args[0];
+  }
   std::filesystem::path p(memprof_dump_path);
   std::filesystem::path dir = p.parent_path();
   report_file = dir.string() + "/" + report_file_arg;
@@ -525,14 +562,14 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   }
 
 
-  if (IsHeapProfilerRunning()) {
-    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
-                                    ER_UDF_ERROR, 0, "profiler",
-                                    "memory profiler is still running, you need to stop it first.");
-    *error = 1;
-    *is_null = 1;
-    return 0;
-  }
+  //if (IsHeapProfilerRunning()) {
+  //  mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+  //                                  ER_UDF_ERROR, 0, "profiler",
+  //                                  "memory profiler is still running, you need to stop it first.");
+  //  *error = 1;
+  //  *is_null = 1;
+  //  return 0;
+  //}
 
   std::string mysqld_binary;
   if (get_mysqld(&mysqld_binary)) {
@@ -583,10 +620,10 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
 }
 
 static bool pprof_mem_diff_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
-  if (args->arg_count != 2) {
+  if (args->arg_count < 2 || args->arg_count > 4) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function requires 2 or 3 arguments <dump_file1>, <dump_file2>, <limit>"); 
+                                    "this function requires 2, 3 or 4 arguments <dump_file1>, <dump_file2>, <limit>, <type>"); 
     return true;
   }
 
@@ -628,6 +665,7 @@ const char *pprof_mem_diff_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   
   std::string dump_file1 = args->args[0];
   std::string dump_file2 = args->args[1];
+  std::string report_type;
   int limit = 0;
   if (args->arg_count > 2) {
     if (args->arg_type[2] == INT_RESULT) {
@@ -639,6 +677,23 @@ const char *pprof_mem_diff_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
       *error = 1;
       *is_null = 1;
       return 0;
+    }
+    if (args->arg_count < 3) {
+      report_type = "text";
+    } else {
+      report_type = args->args[3];
+      if (strcasecmp(report_type.c_str(), "TEXT") == 0) {
+          report_type = "text";
+      } else if (strcasecmp(report_type.c_str(), "DOT") == 0) {
+          report_type = "dot";
+      } else {
+		      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                              ER_UDF_ERROR, 0, "profiler",
+                              "wrong parameter it must be 'TEXT' or 'DOT'.");
+    		  *error = 1;
+    		  *is_null = 1;
+    		  return 0;
+      }
     }
   }
   if (!std::filesystem::exists(dump_file1)) {
@@ -658,14 +713,14 @@ const char *pprof_mem_diff_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
       return 0;
   }
 
-  if (IsHeapProfilerRunning()) {
-    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
-                                    ER_UDF_ERROR, 0, "profiler",
-                                    "memory profiler is still running, you need to stop it first.");
-    *error = 1;
-    *is_null = 1;
-    return 0;
-  }
+  //if (IsHeapProfilerRunning()) {
+  //  mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+  //                                  ER_UDF_ERROR, 0, "profiler",
+  //                                  "memory profiler is still running, you need to stop it first.");
+  //  *error = 1;
+  //  *is_null = 1;
+  //  return 0;
+  //}
 
   std::string mysqld_binary;
   if (get_mysqld(&mysqld_binary)) {
@@ -694,10 +749,10 @@ const char *pprof_mem_diff_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
 
 
   std::string buf; 
-  buf = exec_pprof((std::string(p_variable_value) + " --text --base="
+  buf = exec_pprof((std::string(p_variable_value) + " --" + report_type + " --base="
                  + dump_file1 + " " + mysqld_binary + " " + dump_file2).c_str());
 
-  if (limit > 0) {
+  if (limit > 0 && report_type == "text") {
     buf = limit_lines(buf, limit);
   }
 
@@ -782,6 +837,18 @@ static mysql_service_status_t profiler_memory_service_init() {
                     "new UDF 'memprof_diff()' has been registered successfully.");
    
   register_status_variables();
+  heap_profile_time_interval = std::getenv("HEAP_PROFILE_TIME_INTERVAL") 
+        ? std::stoi(std::getenv("HEAP_PROFILE_TIME_INTERVAL")) 
+        : 0;
+  heap_profile_allocation_interval = std::getenv("HEAP_PROFILE_ALLOCATION_INTERVAL") 
+        ? std::stoi(std::getenv("HEAP_PROFILE_ALLOCATION_INTERVAL")) 
+        : 1073741824;
+  heap_profile_inuse_interval = std::getenv("HEAP_PROFILE_INUSE_INTERVAL") 
+        ? std::stoi(std::getenv("HEAP_PROFILE_INUSE_INTERVAL")) 
+        : 104857600;
+  heap_profile_deallocation_interval = std::getenv("HEAP_PROFILE_DEALLOCATION_INTERVAL") 
+        ? std::stoi(std::getenv("HEAP_PROFILE_DEALLOCATION_INTERVAL")) 
+        : 0;
 
   return result;
 }
