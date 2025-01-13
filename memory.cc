@@ -463,7 +463,7 @@ static bool pprof_mem_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
   if (args->arg_count > 2) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function requires none, 1, 2 or 3 parameters: <dump_file>, <limit>, <'text' or 'dot'> limit is 0 by default, and don't limit the output. Limit is only used for 'text'");
+                                    "this function requires none, 1, 2 or 3 parameters: <'text' or 'dot'>, <limit>, <'dump´> limit is 0 by default, and don't limit the output. Limit is only used for 'text'");
     return true;
   }
 
@@ -507,7 +507,7 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
   std::string report_file;
   std::string report_type;
   std::string report_file_arg;
-  if (args->arg_count < 1) {
+  if (args->arg_count < 3) {
     std::filesystem::path p(memprof_dump_path);
     auto last_file = get_last_file_with_prefix(p.parent_path(), p.filename().string());
     if (!last_file.empty()) { 
@@ -521,7 +521,7 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
       return 0;
     }
   } else {
-    report_file_arg = args->args[0];
+    report_file_arg = args->args[3];
   }
   std::filesystem::path p(memprof_dump_path);
   std::filesystem::path dir = p.parent_path();
@@ -546,10 +546,11 @@ const char *pprof_mem_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
       return 0;
     }
   }
-  if (args->arg_count < 2) {
+  
+  if (args->arg_count < 1) {
       report_type = "text";
   } else {
-      report_type = args->args[2];
+      report_type = args->args[0];
       if (strcasecmp(report_type.c_str(), "TEXT") == 0) {
           report_type = "text";
       } else if (strcasecmp(report_type.c_str(), "DOT") == 0) {
