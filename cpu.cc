@@ -24,6 +24,8 @@
 #define SIGNATURE_CHANGE 1
 
 #include "cpu.h"
+#include <thread>
+#include <chrono>
 
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins);
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins_string);
@@ -98,6 +100,17 @@ class udf_list {
   udf_list_t set;
 } *list;
 
+
+void startCpuProfilerWithTimeout(const std::string& dumpPath, int timeoutSeconds) {
+    ProfilerStart(dumpPath.c_str());
+    std::thread([timeoutSeconds]() {
+      std::this_thread::sleep_for(std::chrono::seconds(timeoutSeconds));
+      ProfilerStop();
+      strcpy(cpuprof_status, "STOPPED");
+      mysql_service_profiler_pfs->add("cpu", "profiler", "stopped", "", ""); 
+  }).detach(); // Detach the thread to allow it to run independently
+}
+
 int register_status_variables() {
   if (mysql_service_status_variable_registration->register_variable(
           (SHOW_VAR *)&cpuprof_status_variables)) {
@@ -134,10 +147,10 @@ const char *udf_init = "udf_init", *my_udf = "my_udf",
 // UDF to start the cpu profiling
 
 static bool cpuprof_start_udf_init(UDF_INIT *initid, UDF_ARGS *args, char *) {
-  if (args->arg_count > 0) {
+  if (args->arg_count > 1) {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "this function doesn't require any parameter");
+                                    "this function requires none of 1 parameter only");
     return true;
   }
   const char* name = "utf8mb4";
@@ -157,7 +170,7 @@ static void cpuprof_start_udf_deinit(__attribute__((unused))
   assert(initid->ptr == udf_init || initid->ptr == my_udf);
 }
 
-const char *cpuprof_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
+const char *cpuprof_start_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
                                 unsigned long *length, char *is_null,
                                 char *error) {
   *error = 0;
@@ -175,7 +188,19 @@ const char *cpuprof_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     *is_null = 1;
     return 0;
   }
-
+  int time = 0;
+  if (args->arg_count > 0) {
+    if (args->arg_type[0] == INT_RESULT) {
+        time = *((int *)args->args[0]);
+    } else {
+      mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "this function requires an integer as parameter");
+      *error = 1;
+      *is_null = 1;
+      return 0;
+    }
+  }
   char variable_value[1024];
   char *p_variable_value;
   size_t value_length = sizeof(variable_value) - 1;
@@ -202,13 +227,26 @@ const char *cpuprof_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
     *is_null = 1;
     return 0;
   }
-
-  ProfilerStart(filePath.c_str());
+  
+  if (strcmp(cpuprof_status, "RUNNING") == 0) {
+    mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
+                                    ER_UDF_ERROR, 0, "profiler",
+                                    "cpu profiler is already running.");
+    *error = 1;
+    *is_null = 1;
+    return 0;
+  }
+  if (time > 0) {
+    startCpuProfilerWithTimeout(filePath.c_str(), time);
+    snprintf(outp, 100, "cpu profiling started for %d seconds", time);
+  } else {
+    ProfilerStart(filePath.c_str());
+    strcpy(outp, "cpu profiling started");
+  }
 
   strcpy(cpuprof_status, "RUNNING");
   mysql_service_profiler_pfs->add("cpu", "profiler", "started", filePath.c_str(), ""); 
 
-  strcpy(outp, "cpu profiling started");
   *length = strlen(outp);
 
   return const_cast<char *>(outp);
@@ -347,7 +385,6 @@ const char *pprof_cpu_udf(UDF_INIT *, UDF_ARGS *args, char *outp,
           if (strcasecmp(report_type.c_str(), "TEXT") == 0) {
                   report_type = "text";
           } else if (strcasecmp(report_type.c_str(), "DOT") == 0) {
-                  report_type = "dot";
           } else {
                 mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
