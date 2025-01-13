@@ -122,6 +122,9 @@ std::filesystem::path get_last_file_with_prefix(const std::filesystem::path& dir
     namespace fs = std::filesystem;
 
     fs::path last_file;
+    if (directory.empty()) {
+      return last_file;
+    }
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (entry.is_regular_file() && entry.path().filename().string().find(prefix) == 0) {
             if (last_file.empty() || entry.path().filename().string() > last_file.filename().string()) {
