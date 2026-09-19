@@ -30,6 +30,7 @@ jobs:
       component_directory: profiler
       build_target: component_${{ matrix.component }}
       component_library: component_${{ matrix.component }}.so
+      extra_packages: gperftools-devel
 
       sdk_image: quay.io/lefred14/mysql-component-build
       mysql_versions: |
@@ -37,5 +38,4 @@ jobs:
         26.7.0
 
       run_tests: false
-      extra_packages: gperftools-devel
 
