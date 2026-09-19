@@ -37,4 +37,5 @@ jobs:
         26.7.0
 
       run_tests: false
+      extra_packages: gperftools-devel
 
