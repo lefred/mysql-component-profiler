@@ -1,0 +1,40 @@
+name: Build and package PROFILER component
+
+on:
+  push:
+    tags:
+      - "v*"
+
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.component }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        component:
+          - profiler
+          - profiler_cpu
+          - profiler_memory
+          - profiler_jemalloc_memory
+
+    uses: lefred/mysql-component-ci/.github/workflows/build-component.yml@main
+    with:
+      component_name: ${{ matrix.component }}
+      component_directory: profiler
+      build_target: component_${{ matrix.component }}
+      component_library: component_${{ matrix.component }}.so
+
+      sdk_image: quay.io/lefred14/mysql-component-build
+      mysql_versions: |
+        9.7.2
+        26.7.0
+
+      run_tests: false
+

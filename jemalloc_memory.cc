@@ -24,6 +24,8 @@
 #define SIGNATURE_CHANGE 1
 
 #include "jemalloc_memory.h"
+#include <thread>
+#include <chrono>
 
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins);
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins_string);
@@ -52,7 +54,7 @@ static char *jeprof_path_value;
 
 
 static char memprof_jemalloc_status[] = "STOPPED";
-int dump_count;
+int dump_count = 1;
 
 // Buffer for the value of the profiler.dump_path global variable
 std::string memprof_jemalloc_dump_path;
@@ -270,7 +272,7 @@ const char *memprof_jemalloc_start_udf(UDF_INIT *, UDF_ARGS *, char *outp,
   {
     mysql_error_service_emit_printf(mysql_service_mysql_runtime_error,
                                     ER_UDF_ERROR, 0, "profiler",
-                                    "Error enabling jemalloc profiling.");
+                                    "Error enabling jemalloc profiling. Did you use MALLOC_CONF=\"prof:true\"?");
     *error = 1;
     *is_null = 1;
     return 0;

@@ -53,25 +53,11 @@ SERVICE_TYPE(log_builtins_string) * log_bs;
 static char memprof_status[] = "STOPPED";
 int dump_count = 1;
 
-static unsigned int heap_profile_time_interval = 0;
-static unsigned int heap_profile_allocation_interval = 0;
-static unsigned int heap_profile_inuse_interval = 0;
-static unsigned int heap_profile_deallocation_interval = 0;
-
-
 // Buffer for the value of the profiler.dump_path global variable
 std::string memprof_dump_path;
 
 static SHOW_VAR memprof_status_variables[] = {
   {"profiler.memory_status", (char *)&memprof_status, SHOW_CHAR,
-    SHOW_SCOPE_GLOBAL},
-  {"profiler.heap_profile_time_interval", (char *)&heap_profile_time_interval, SHOW_INT,
-    SHOW_SCOPE_GLOBAL},
-  {"profiler.heap_profile_allocation_interval", (char *)&heap_profile_allocation_interval, SHOW_INT,
-    SHOW_SCOPE_GLOBAL},
-  {"profiler.heap_profile_inuse_interval", (char *)&heap_profile_inuse_interval, SHOW_INT,
-    SHOW_SCOPE_GLOBAL},
-  {"profiler.heap_profile_deallocation_interval", (char *)&heap_profile_deallocation_interval, SHOW_INT,
     SHOW_SCOPE_GLOBAL},
   {nullptr, nullptr, SHOW_UNDEF,
     SHOW_SCOPE_UNDEF}  // null terminator required
@@ -841,18 +827,6 @@ static mysql_service_status_t profiler_memory_service_init() {
                     "new UDF 'memprof_diff()' has been registered successfully.");
    
   register_status_variables();
-  heap_profile_time_interval = std::getenv("HEAP_PROFILE_TIME_INTERVAL") 
-        ? std::stoi(std::getenv("HEAP_PROFILE_TIME_INTERVAL")) 
-        : 0;
-  heap_profile_allocation_interval = std::getenv("HEAP_PROFILE_ALLOCATION_INTERVAL") 
-        ? std::stoi(std::getenv("HEAP_PROFILE_ALLOCATION_INTERVAL")) 
-        : 1073741824;
-  heap_profile_inuse_interval = std::getenv("HEAP_PROFILE_INUSE_INTERVAL") 
-        ? std::stoi(std::getenv("HEAP_PROFILE_INUSE_INTERVAL")) 
-        : 104857600;
-  heap_profile_deallocation_interval = std::getenv("HEAP_PROFILE_DEALLOCATION_INTERVAL") 
-        ? std::stoi(std::getenv("HEAP_PROFILE_DEALLOCATION_INTERVAL")) 
-        : 0;
 
   return result;
 }
